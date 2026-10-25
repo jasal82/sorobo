@@ -8,10 +8,10 @@ import type { PersonHours } from "./PersonHours";
 
 export type TimeReport = { 
 /**
- * Hours per document, most hours first.
+ * Hours per project (an order with the quote it came from), most hours first.
  */
 documents: Array<DocumentHours>, 
 /**
  * Hours per person over all documents of the filter, most hours first.
  */
-people: Array<PersonHours>, total: number, };
+people: Array<PersonHours>, total: number, quote_hours: number, };

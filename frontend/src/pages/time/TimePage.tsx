@@ -14,7 +14,7 @@ import { ListTable } from '@/components/ListTable';
 import { Empty, Page, PageHeader, SectionCard, StatPill, confirmAction } from '@/components/ui';
 import { exportCsv } from '@/lib/csv';
 import { date, percent, qty, today } from '@/lib/format';
-import { DOC_TYPES } from '@/lib/labels';
+import { DOC_TYPES, type DocType } from '@/lib/labels';
 
 const hours = (h: number) => `${qty(h)} Std`;
 const share = (h: number, total: number) => (total > 0 ? (h / total) * 100 : 0);
@@ -23,18 +23,23 @@ function documentLabel(number: string, title: string, contact: string) {
   return [number || 'Entwurf', title, contact].filter(Boolean).join(' · ');
 }
 
+/** Hours are booked on quotes (preparing the offer) and orders; `keep` is an older entry's document. */
+const BOOKABLE: DocType[] = ['quote', 'order'];
+
 /** Select options for the documents hours can be booked on, grouped by document type. */
-function useDocumentOptions() {
+function useDocumentOptions(keep = 0) {
   const { data } = useApi<DocumentListItem[]>('/documents');
   return useMemo(
     () =>
-      Object.entries(DOC_TYPES)
-        .map(([type, meta]) => ({
-          group: meta.plural,
-          items: (data ?? []).filter((d) => d.doc_type === type).map((d) => ({ value: String(d.id), label: documentLabel(d.number, d.title, d.contact_name) })),
+      (Object.keys(DOC_TYPES) as DocType[])
+        .map((type) => ({
+          group: DOC_TYPES[type].plural,
+          items: (data ?? [])
+            .filter((d) => d.doc_type === type && (BOOKABLE.includes(type) || d.id === keep))
+            .map((d) => ({ value: String(d.id), label: documentLabel(d.number, d.title, d.contact_name) })),
         }))
         .filter((g) => g.items.length > 0),
-    [data],
+    [data, keep],
   );
 }
 
@@ -55,12 +60,12 @@ function EntryModal({
   people: Person[];
   onSaved: (e: TimeEntry) => void;
 }) {
-  const documents = useDocumentOptions();
   const [form, setForm] = useState<TimeEntry>(emptyEntry(0, 0));
   useEffect(() => {
     if (opened) setForm(entry ?? emptyEntry(0, 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, entry?.id]);
+  const documents = useDocumentOptions(entry?.document_id);
   const set = (patch: Partial<TimeEntry>) => setForm((f) => ({ ...f, ...patch }));
   const save = useAction((e: TimeEntry) => (e.id ? api.put<TimeEntry>(`/time-entries/${e.id}`, e) : api.post<TimeEntry>('/time-entries', e)), {
     success: 'Gespeichert',
@@ -90,13 +95,15 @@ function EntryModal({
             data-autofocus={!form.person_id}
           />
           <Select
-            label="Angebot / Dokument"
+            label="Angebot / Auftragsbestätigung"
+            description="Stunden vor der Auftragsbestätigung auf das Angebot buchen – die Auswertung weist sie getrennt aus"
+            inputWrapperOrder={['label', 'input', 'description', 'error']}
             required
             searchable
             data={documents}
             value={form.document_id ? String(form.document_id) : null}
             onChange={(v) => set({ document_id: v ? Number(v) : 0 })}
-            placeholder="Dokument wählen"
+            placeholder="Angebot oder Auftrag wählen"
             nothingFoundMessage="Kein Dokument gefunden"
           />
           <SimpleGrid cols={2} spacing="sm">
@@ -218,13 +225,20 @@ function PeopleModal({ opened, onClose, people }: { opened: boolean; onClose: ()
   );
 }
 
-function PeopleTable({ list, total }: { list: PersonHours[]; total: number }) {
+function PeopleTable({ list, total, showQuote }: { list: PersonHours[]; total: number; showQuote: boolean }) {
   return (
     <Table verticalSpacing="xs">
       <Table.Thead>
         <Table.Tr>
           <Table.Th>Person</Table.Th>
           <Table.Th ta="right">Stunden</Table.Th>
+          {showQuote && (
+            <Table.Th ta="right">
+              <Tooltip label="Davon auf dem Angebot gebucht (Angebotserstellung)">
+                <span>davon Angebot</span>
+              </Tooltip>
+            </Table.Th>
+          )}
           <Table.Th w="40%">Anteil</Table.Th>
         </Table.Tr>
       </Table.Thead>
@@ -235,6 +249,11 @@ function PeopleTable({ list, total }: { list: PersonHours[]; total: number }) {
             <Table.Td ta="right" className="tabular">
               {hours(p.hours)}
             </Table.Td>
+            {showQuote && (
+              <Table.Td ta="right" className="tabular" c={p.quote_hours > 0 ? undefined : 'dimmed'}>
+                {p.quote_hours > 0 ? hours(p.quote_hours) : '–'}
+              </Table.Td>
+            )}
             <Table.Td>
               <Group gap="xs" wrap="nowrap">
                 <Progress value={share(p.hours, total)} flex={1} size="sm" aria-label={`Anteil ${p.name}`} />
@@ -256,20 +275,42 @@ function ReportTab({ report }: { report: TimeReport | undefined }) {
   }
   return (
     <Stack gap="md">
-      <SectionCard title="Stunden je Person" description="Über alle Angebote und Dokumente der Auswahl – die Grundlage für die Verteilung des Gewinns">
-        <PeopleTable list={report.people} total={report.total} />
+      <SectionCard title="Stunden je Person" description="Über alle Projekte der Auswahl – die Grundlage für die Verteilung des Gewinns. Ein Angebot zählt mit seinem Auftrag als ein Projekt.">
+        <PeopleTable list={report.people} total={report.total} showQuote={report.quote_hours > 0} />
       </SectionCard>
       {report.documents.map((d) => (
         <SectionCard
           key={d.document_id}
-          title={documentLabel(d.number, d.title, d.contact_name)}
+          title={
+            <Group gap="xs" wrap="nowrap">
+              <Text fw={650} truncate>
+                {documentLabel(d.number, d.title, d.contact_name)}
+              </Text>
+              {d.doc_type === 'quote' ? (
+                <Badge size="sm" variant="light" color="gray">
+                  Angebot · noch kein Auftrag
+                </Badge>
+              ) : (
+                <Badge size="sm" variant="light" color="teal">
+                  Auftrag
+                </Badge>
+              )}
+            </Group>
+          }
           actions={
-            <Text fw={650} className="tabular">
-              {hours(d.total)}
-            </Text>
+            <Stack gap={0} align="flex-end">
+              <Text fw={650} className="tabular">
+                {hours(d.total)}
+              </Text>
+              {d.quote_hours > 0 && d.doc_type !== 'quote' && (
+                <Text size="xs" c="dimmed" className="tabular">
+                  davon Angebotserstellung {hours(d.quote_hours)}
+                </Text>
+              )}
+            </Stack>
           }
         >
-          <PeopleTable list={d.people} total={d.total} />
+          <PeopleTable list={d.people} total={d.total} showQuote={d.quote_hours > 0 && d.doc_type !== 'quote'} />
         </SectionCard>
       ))}
     </Stack>
@@ -323,7 +364,8 @@ export function TimePage() {
                 exportCsv('Zeiterfassung', entries ?? [], [
                   { label: 'Datum', value: (e) => e.entry.date },
                   { label: 'Person', value: (e) => e.person_name },
-                  { label: 'Dokument', value: (e) => e.document_number },
+                  { label: 'Art', value: (e) => DOC_TYPES[e.document_type as DocType]?.singular ?? '' },
+                  { label: 'Nummer', value: (e) => e.document_number },
                   { label: 'Titel', value: (e) => e.document_title },
                   { label: 'Kunde', value: (e) => e.contact_name },
                   { label: 'Stunden', value: (e) => e.entry.hours },
@@ -350,7 +392,7 @@ export function TimePage() {
             onChange={setPersonId}
             w={200}
           />
-          <Select placeholder="Alle Angebote / Dokumente" clearable searchable data={documents} value={documentId} onChange={setDocumentId} w={320} />
+          <Select placeholder="Alle Angebote / Aufträge" clearable searchable data={documents} value={documentId} onChange={setDocumentId} w={320} />
           <Group gap="sm" ml="auto">
             <StatPill label="Stunden gesamt" value={hours(report?.total ?? 0)} />
           </Group>
@@ -385,11 +427,16 @@ export function TimePage() {
                     { accessor: 'person_name', title: 'Person', sortable: true },
                     {
                       accessor: 'document_number',
-                      title: 'Angebot / Dokument',
+                      title: 'Angebot / Auftrag',
                       render: (r) => (
-                        <Text size="sm" lineClamp={1}>
-                          {documentLabel(r.document_number, r.document_title, r.contact_name)}
-                        </Text>
+                        <Group gap="xs" wrap="nowrap">
+                          <Badge size="xs" variant="light" color={r.document_type === 'quote' ? 'gray' : 'teal'}>
+                            {DOC_TYPES[r.document_type as DocType]?.singular ?? 'Dokument'}
+                          </Badge>
+                          <Text size="sm" lineClamp={1}>
+                            {documentLabel(r.document_number, r.document_title, r.contact_name)}
+                          </Text>
+                        </Group>
                       ),
                     },
                     { accessor: 'note', title: 'Notiz', visibleMediaQuery: '(min-width: 62em)', ellipsis: true, render: (r) => r.entry.note },

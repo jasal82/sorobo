@@ -63,7 +63,7 @@ pub struct TimeFilter {
     pub document_id: Option<i64>,
 }
 
-fn entries_of(conn: &Connection, f: &TimeFilter) -> Result<Vec<TimeEntry>> {
+fn entries_in(conn: &Connection, f: &TimeFilter, docs: &DocumentIndex) -> Result<Vec<TimeEntry>> {
     let mut sql = String::from("WHERE 1 = 1");
     let mut params = Vec::new();
     if let Some(d) = f.from {
@@ -79,8 +79,9 @@ fn entries_of(conn: &Connection, f: &TimeFilter) -> Result<Vec<TimeEntry>> {
         sql.push_str(&format!(" AND person_id = ?{}", params.len()));
     }
     if let Some(id) = f.document_id {
-        params.push(v(id));
-        sql.push_str(&format!(" AND document_id = ?{}", params.len()));
+        // A project is its order together with the quote it came from.
+        let ids = docs.project_of(id).iter().map(i64::to_string).collect::<Vec<_>>().join(", ");
+        sql.push_str(&format!(" AND document_id IN ({ids})"));
     }
     sql.push_str(" ORDER BY date DESC, id DESC");
     db::query::<TimeEntry>(conn, &sql, &params)
@@ -94,38 +95,82 @@ pub struct TimeEntryItem {
     pub document_number: String,
     pub document_title: String,
     pub contact_name: String,
+    /// quote | order (hours booked earlier may be on another type)
+    pub document_type: String,
 }
 
-/// Names of the documents and their customers, by document id.
-struct DocumentNames(HashMap<i64, (String, String, String)>);
+struct DocumentInfo {
+    number: String,
+    title: String,
+    contact_name: String,
+    doc_type: String,
+}
 
-impl DocumentNames {
+/// The documents hours are booked on, and which of them belong to the same project: a quote
+/// that was turned into an order shares the project with that order.
+struct DocumentIndex {
+    docs: HashMap<i64, DocumentInfo>,
+    /// Document id -> the order its quote became (only for quotes that have one).
+    order_of: HashMap<i64, i64>,
+}
+
+impl DocumentIndex {
     fn load(conn: &Connection) -> Result<Self> {
         let contacts: HashMap<i64, String> = db::query::<Contact>(conn, "", &[])?.into_iter().map(|c| (c.id, c.display_name())).collect();
-        let docs = db::query::<Document>(conn, "", &[])?;
-        Ok(Self(
-            docs.into_iter()
-                .map(|d| {
-                    let contact = d.contact_id.and_then(|id| contacts.get(&id).cloned()).unwrap_or_else(|| d.address.lines().next().unwrap_or_default().to_string());
-                    (d.id, (d.number, d.title, contact))
-                })
-                .collect(),
-        ))
+        let all = db::query::<Document>(conn, "ORDER BY id", &[])?;
+        let mut order_of = HashMap::new();
+        for d in all.iter().filter(|d| d.doc_type == "order") {
+            if let Some(quote) = d.source_id {
+                order_of.entry(quote).or_insert(d.id);
+            }
+        }
+        let docs = all
+            .into_iter()
+            .map(|d| {
+                let contact_name = d.contact_id.and_then(|id| contacts.get(&id).cloned()).unwrap_or_else(|| d.address.lines().next().unwrap_or_default().to_string());
+                (d.id, DocumentInfo { number: d.number, title: d.title, contact_name, doc_type: d.doc_type })
+            })
+            .collect();
+        Ok(Self { docs, order_of })
     }
 
-    fn get(&self, id: i64) -> (String, String, String) {
-        self.0.get(&id).cloned().unwrap_or_default()
+    fn info(&self, id: i64) -> Option<&DocumentInfo> {
+        self.docs.get(&id)
+    }
+
+    fn doc_type(&self, id: i64) -> &str {
+        self.info(id).map_or("", |d| d.doc_type.as_str())
+    }
+
+    /// The document that stands for the project of `id`: the order a quote became, else itself.
+    fn anchor(&self, id: i64) -> i64 {
+        if self.doc_type(id) == "quote" { self.order_of.get(&id).copied().unwrap_or(id) } else { id }
+    }
+
+    /// All documents of the project `id` belongs to.
+    fn project_of(&self, id: i64) -> Vec<i64> {
+        let anchor = self.anchor(id);
+        let mut ids: Vec<i64> = self.docs.keys().copied().filter(|d| self.anchor(*d) == anchor).collect();
+        ids.sort_unstable();
+        ids
     }
 }
 
 pub fn list_entries(conn: &Connection, f: &TimeFilter) -> Result<Vec<TimeEntryItem>> {
     let people: HashMap<i64, String> = list_people(conn)?.into_iter().map(|p| (p.id, p.name)).collect();
-    let docs = DocumentNames::load(conn)?;
-    Ok(entries_of(conn, f)?
+    let docs = DocumentIndex::load(conn)?;
+    Ok(entries_in(conn, f, &docs)?
         .into_iter()
         .map(|entry| {
-            let (document_number, document_title, contact_name) = docs.get(entry.document_id);
-            TimeEntryItem { person_name: people.get(&entry.person_id).cloned().unwrap_or_default(), document_number, document_title, contact_name, entry }
+            let info = docs.info(entry.document_id);
+            TimeEntryItem {
+                person_name: people.get(&entry.person_id).cloned().unwrap_or_default(),
+                document_number: info.map(|d| d.number.clone()).unwrap_or_default(),
+                document_title: info.map(|d| d.title.clone()).unwrap_or_default(),
+                contact_name: info.map(|d| d.contact_name.clone()).unwrap_or_default(),
+                document_type: info.map(|d| d.doc_type.clone()).unwrap_or_default(),
+                entry,
+            }
         })
         .collect())
 }
@@ -139,8 +184,13 @@ pub fn save_entry(conn: &Connection, mut e: TimeEntry) -> Result<TimeEntry> {
         Some(p) => p,
         None => bail_user!("Bitte eine Person wählen."),
     };
-    if db::find::<Document>(conn, e.document_id)?.is_none() {
-        bail_user!("Bitte ein Angebot oder Dokument wählen.");
+    let Some(doc) = db::find::<Document>(conn, e.document_id)? else {
+        bail_user!("Bitte ein Angebot oder eine Auftragsbestätigung wählen.");
+    };
+    // Hours booked earlier on another document type stay editable.
+    let unchanged = e.id > 0 && db::get::<TimeEntry>(conn, e.id)?.document_id == e.document_id;
+    if !["quote", "order"].contains(&doc.doc_type.as_str()) && !unchanged {
+        bail_user!("Stunden lassen sich nur auf Angebote und Auftragsbestätigungen buchen.");
     }
     e.note = e.note.trim().to_string();
     e.updated_at = now_str();
@@ -169,29 +219,39 @@ pub struct PersonHours {
     pub name: String,
     #[ts(type = "number")]
     pub hours: Decimal,
+    /// Of which booked on a quote (preparing the offer).
+    #[ts(type = "number")]
+    pub quote_hours: Decimal,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct DocumentHours {
+    /// The order, or the quote while there is no order yet.
     pub document_id: i64,
+    pub doc_type: String,
     pub number: String,
     pub title: String,
     pub contact_name: String,
     #[ts(type = "number")]
     pub total: Decimal,
+    /// Of which booked on a quote (preparing the offer).
+    #[ts(type = "number")]
+    pub quote_hours: Decimal,
     pub people: Vec<PersonHours>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct TimeReport {
-    /// Hours per document, most hours first.
+    /// Hours per project (an order with the quote it came from), most hours first.
     pub documents: Vec<DocumentHours>,
     /// Hours per person over all documents of the filter, most hours first.
     pub people: Vec<PersonHours>,
     #[ts(type = "number")]
     pub total: Decimal,
+    #[ts(type = "number")]
+    pub quote_hours: Decimal,
 }
 
 fn by_hours(list: &mut [PersonHours]) {
@@ -200,30 +260,43 @@ fn by_hours(list: &mut [PersonHours]) {
 
 pub fn report(conn: &Connection, f: &TimeFilter) -> Result<TimeReport> {
     let names: HashMap<i64, String> = list_people(conn)?.into_iter().map(|p| (p.id, p.name)).collect();
-    let docs = DocumentNames::load(conn)?;
-    // document -> person -> hours
-    let mut per_doc: BTreeMap<i64, BTreeMap<i64, Decimal>> = BTreeMap::new();
-    let mut per_person: BTreeMap<i64, Decimal> = BTreeMap::new();
-    let mut total = Decimal::ZERO;
-    for e in entries_of(conn, f)? {
-        *per_doc.entry(e.document_id).or_default().entry(e.person_id).or_default() += e.hours;
-        *per_person.entry(e.person_id).or_default() += e.hours;
+    let docs = DocumentIndex::load(conn)?;
+    // project -> person -> (hours, of which on a quote)
+    let mut per_doc: BTreeMap<i64, BTreeMap<i64, (Decimal, Decimal)>> = BTreeMap::new();
+    let mut per_person: BTreeMap<i64, (Decimal, Decimal)> = BTreeMap::new();
+    let (mut total, mut quote_total) = (Decimal::ZERO, Decimal::ZERO);
+    for e in entries_in(conn, f, &docs)? {
+        let quote = if docs.doc_type(e.document_id) == "quote" { e.hours } else { Decimal::ZERO };
+        for slot in [per_doc.entry(docs.anchor(e.document_id)).or_default().entry(e.person_id).or_default(), per_person.entry(e.person_id).or_default()] {
+            slot.0 += e.hours;
+            slot.1 += quote;
+        }
         total += e.hours;
+        quote_total += quote;
     }
-    let person_hours = |id: i64, hours: Decimal| PersonHours { person_id: id, name: names.get(&id).cloned().unwrap_or_default(), hours };
+    let person_hours = |id: i64, (hours, quote_hours): (Decimal, Decimal)| PersonHours { person_id: id, name: names.get(&id).cloned().unwrap_or_default(), hours, quote_hours };
     let mut documents: Vec<DocumentHours> = per_doc
         .into_iter()
         .map(|(document_id, people)| {
             let mut people: Vec<PersonHours> = people.into_iter().map(|(id, h)| person_hours(id, h)).collect();
             by_hours(&mut people);
-            let (number, title, contact_name) = docs.get(document_id);
-            DocumentHours { document_id, number, title, contact_name, total: people.iter().map(|p| p.hours).sum(), people }
+            let info = docs.info(document_id);
+            DocumentHours {
+                document_id,
+                doc_type: info.map(|d| d.doc_type.clone()).unwrap_or_default(),
+                number: info.map(|d| d.number.clone()).unwrap_or_default(),
+                title: info.map(|d| d.title.clone()).unwrap_or_default(),
+                contact_name: info.map(|d| d.contact_name.clone()).unwrap_or_default(),
+                total: people.iter().map(|p| p.hours).sum(),
+                quote_hours: people.iter().map(|p| p.quote_hours).sum(),
+                people,
+            }
         })
         .collect();
     documents.sort_by(|a, b| b.total.cmp(&a.total).then_with(|| a.number.cmp(&b.number)));
     let mut people: Vec<PersonHours> = per_person.into_iter().map(|(id, h)| person_hours(id, h)).collect();
     by_hours(&mut people);
-    Ok(TimeReport { documents, people, total })
+    Ok(TimeReport { documents, people, total, quote_hours: quote_total })
 }
 
 #[cfg(test)]
@@ -315,5 +388,50 @@ mod tests {
         assert!(err.contains("Stunden erfasst"), "{err}");
         delete_entry(&conn, e.id).unwrap();
         crate::services::documents::delete(&conn, doc).unwrap();
+    }
+
+    #[test]
+    fn a_quote_and_its_order_are_one_project_and_the_quote_hours_show() {
+        let (conn, anna, ben, quote) = setup();
+        conn.execute_batch(
+            "INSERT INTO documents (id, doc_type, contact_id, date, number, title, source_id) VALUES (3, 'order', 1, '2026-01-20', 'AB-1', 'Website', 1);",
+        )
+        .unwrap();
+        save_entry(&conn, entry(anna, quote, "2026-01-12", dec!(4))).unwrap();
+        save_entry(&conn, entry(anna, 3, "2026-01-25", dec!(10))).unwrap();
+        save_entry(&conn, entry(ben, 3, "2026-01-26", dec!(5))).unwrap();
+        save_entry(&conn, entry(ben, 2, "2026-02-03", dec!(1))).unwrap();
+        let r = report(&conn, &TimeFilter::default()).unwrap();
+        assert_eq!(r.documents.len(), 2, "the quote is listed under its order");
+        let project = &r.documents[0];
+        assert_eq!((project.document_id, project.doc_type.as_str(), project.number.as_str()), (3, "order", "AB-1"));
+        assert_eq!((project.total, project.quote_hours), (dec!(19), dec!(4)));
+        let anna_hours = project.people.iter().find(|p| p.name == "Anna").unwrap();
+        assert_eq!((anna_hours.hours, anna_hours.quote_hours), (dec!(14), dec!(4)));
+        // A quote without an order is its own project, and all its hours are quote hours.
+        let open_quote = &r.documents[1];
+        assert_eq!((open_quote.document_id, open_quote.doc_type.as_str(), open_quote.total, open_quote.quote_hours), (2, "quote", dec!(1), dec!(1)));
+        assert_eq!((r.total, r.quote_hours), (dec!(20), dec!(5)));
+        // Filtering by the quote or by the order finds the whole project.
+        for id in [1, 3] {
+            let f = TimeFilter { document_id: Some(id), ..Default::default() };
+            assert_eq!(list_entries(&conn, &f).unwrap().len(), 3, "document {id}");
+            assert_eq!(report(&conn, &f).unwrap().total, dec!(19), "document {id}");
+        }
+    }
+
+    #[test]
+    fn hours_can_only_be_booked_on_quotes_and_orders() {
+        let (conn, anna, _, _) = setup();
+        conn.execute_batch("INSERT INTO documents (id, doc_type, date, number) VALUES (4, 'invoice', '2026-02-01', 'RE-1');").unwrap();
+        assert!(save_entry(&conn, entry(anna, 4, "2026-02-02", dec!(1))).is_err());
+        // Hours booked there earlier stay editable, but cannot be moved onto another invoice.
+        conn.execute("INSERT INTO time_entries (id, person_id, document_id, date, hours) VALUES (50, ?1, 4, '2026-02-02', '2')", [anna]).unwrap();
+        conn.execute_batch("INSERT INTO documents (id, doc_type, date, number) VALUES (5, 'invoice', '2026-02-01', 'RE-2');").unwrap();
+        let edited = TimeEntry { id: 50, ..entry(anna, 4, "2026-02-02", dec!(3)) };
+        assert_eq!(save_entry(&conn, edited).unwrap().hours, dec!(3));
+        assert_eq!(list_entries(&conn, &TimeFilter::default()).unwrap()[0].document_type, "invoice");
+        assert!(save_entry(&conn, TimeEntry { id: 50, ..entry(anna, 5, "2026-02-02", dec!(3)) }).is_err());
+        assert!(save_entry(&conn, TimeEntry { id: 50, ..entry(anna, 1, "2026-02-02", dec!(3)) }).is_ok(), "moving onto a quote is fine");
     }
 }
