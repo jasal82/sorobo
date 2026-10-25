@@ -10,6 +10,7 @@ mod finance;
 mod masterdata;
 mod reports;
 mod system;
+mod timetracking;
 mod update;
 
 pub(crate) use documents::deliver_recurring;
@@ -63,6 +64,12 @@ pub fn router(state: AppState) -> Router {
         .route("/contacts/{id}/defaults", get(masterdata::contact_defaults))
         .route("/articles", get(masterdata::articles).post(masterdata::create_article))
         .route("/articles/{id}", get(masterdata::article).put(masterdata::update_article).delete(masterdata::delete_article))
+        // Zeiterfassung
+        .route("/people", get(timetracking::people).post(timetracking::create_person))
+        .route("/people/{id}", put(timetracking::update_person).delete(timetracking::delete_person))
+        .route("/time-entries", get(timetracking::entries).post(timetracking::create_entry))
+        .route("/time-entries/report", get(timetracking::report))
+        .route("/time-entries/{id}", put(timetracking::update_entry).delete(timetracking::delete_entry))
         // Dokumente
         .route("/documents", get(documents::list).post(documents::create))
         .route("/documents/counts", get(documents::counts))

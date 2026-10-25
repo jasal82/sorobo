@@ -485,3 +485,23 @@ CREATE TABLE IF NOT EXISTS zm_filings (
   note         TEXT NOT NULL DEFAULT '',
   UNIQUE(year, period)
 );
+
+CREATE TABLE IF NOT EXISTS people (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL,
+  archived   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS time_entries (
+  id          INTEGER PRIMARY KEY,
+  person_id   INTEGER NOT NULL REFERENCES people(id),
+  document_id INTEGER NOT NULL REFERENCES documents(id),
+  date        TEXT NOT NULL,
+  hours       TEXT NOT NULL DEFAULT '0',
+  note        TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL DEFAULT '',
+  updated_at  TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_time_entries_document ON time_entries(document_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_person ON time_entries(person_id, date);

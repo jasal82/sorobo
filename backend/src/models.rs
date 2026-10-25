@@ -804,6 +804,31 @@ entity! {
 }
 
 entity! {
+    /// Person whose hours are recorded (Zeiterfassung).
+    pub struct Person in "people" {
+        pub id: i64,
+        pub name: String,
+        pub archived: bool,
+        pub created_at: String,
+    }
+}
+
+entity! {
+    /// Hours a person worked on a document (quote, order, …).
+    pub struct TimeEntry in "time_entries" {
+        pub id: i64,
+        pub person_id: i64,
+        pub document_id: i64,
+        pub date: NaiveDate,
+        #[ts(type = "number")]
+        pub hours: Decimal,
+        pub note: String,
+        pub created_at: String,
+        pub updated_at: String,
+    }
+}
+
+entity! {
     pub struct UstvaFiling in "ustva_filings" {
         pub id: i64,
         pub year: i64,
