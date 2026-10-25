@@ -37,6 +37,7 @@ import {
   IconChartBar,
   IconChartPie,
   IconChevronDown,
+  IconClock,
   IconFileDownload,
   IconFileInvoice,
   IconFileText,
@@ -105,6 +106,7 @@ function useNavSections(counts: { overdue: number; transactions: number; drafts:
       items: [
         { label: 'Kontakte', to: '/kontakte', icon: IconAddressBook },
         { label: 'Produkte & Leistungen', to: '/artikel', icon: IconPackage },
+        { label: 'Zeiterfassung', to: '/zeiterfassung', icon: IconClock },
       ],
     },
     {
