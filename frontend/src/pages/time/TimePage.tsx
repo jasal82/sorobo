@@ -3,12 +3,12 @@
 // See LICENSE in the project root for the full license and warranty disclaimer.
 
 import { useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Badge, Button, Card, Group, Modal, Progress, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Textarea, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, Group, Modal, Progress, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Textarea, Tooltip } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { IconCalendar, IconClock, IconEdit, IconFileExport, IconPlus, IconRestore, IconTrash, IconUsers } from '@tabler/icons-react';
 import { api } from '@/api/client';
 import { useAction, useApi } from '@/api/hooks';
-import type { DocumentListItem, Person, PersonHours, TimeEntry, TimeEntryItem, TimeReport } from '@/api/types';
+import type { DocumentListItem, Person, PersonHours, ProjectHours, TimeEntry, TimeEntryItem, TimeReport } from '@/api/types';
 import { DateField, DecimalInput } from '@/components/inputs';
 import { ListTable } from '@/components/ListTable';
 import { Empty, Page, PageHeader, SectionCard, StatPill, confirmAction } from '@/components/ui';
@@ -29,7 +29,7 @@ const BOOKABLE: DocType[] = ['quote', 'order'];
 /** Select options for the documents hours can be booked on, grouped by document type. */
 function useDocumentOptions(keep = 0) {
   const { data } = useApi<DocumentListItem[]>('/documents');
-  return useMemo(
+  const options = useMemo(
     () =>
       (Object.keys(DOC_TYPES) as DocType[])
         .map((type) => ({
@@ -41,10 +41,30 @@ function useDocumentOptions(keep = 0) {
         .filter((g) => g.items.length > 0),
     [data, keep],
   );
+  return { options, documents: data ?? [] };
+}
+
+/** Hours on a quote that has not been accepted yet are, by default, work on the offer. */
+const isOfferPhase = (d: DocumentListItem | undefined) => d?.doc_type === 'quote' && d.status !== 'accepted';
+
+/** Where a project stands, from the quote's status and the orders converted from it. */
+function projectState(p: ProjectHours): { label: string; color: string } {
+  if (p.doc_type === 'order') return { label: 'Beauftragt', color: 'teal' };
+  if (p.orders.length > 0) return { label: `Beauftragt · ${p.orders.join(', ')}`, color: 'teal' };
+  switch (p.status) {
+    case 'accepted':
+      return { label: 'Beauftragt', color: 'teal' };
+    case 'rejected':
+      return { label: 'Angebot abgelehnt', color: 'red' };
+    case 'open':
+      return { label: 'Angebot offen', color: 'blue' };
+    default:
+      return { label: 'Angebot (Entwurf)', color: 'gray' };
+  }
 }
 
 function emptyEntry(personId: number, documentId: number): TimeEntry {
-  return { id: 0, person_id: personId, document_id: documentId, date: today(), hours: 0, note: '', created_at: '', updated_at: '' };
+  return { id: 0, person_id: personId, document_id: documentId, date: today(), hours: 0, offer_phase: false, note: '', created_at: '', updated_at: '' };
 }
 
 function EntryModal({
@@ -65,7 +85,7 @@ function EntryModal({
     if (opened) setForm(entry ?? emptyEntry(0, 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, entry?.id]);
-  const documents = useDocumentOptions(entry?.document_id);
+  const { options: documents, documents: docList } = useDocumentOptions(entry?.document_id);
   const set = (patch: Partial<TimeEntry>) => setForm((f) => ({ ...f, ...patch }));
   const save = useAction((e: TimeEntry) => (e.id ? api.put<TimeEntry>(`/time-entries/${e.id}`, e) : api.post<TimeEntry>('/time-entries', e)), {
     success: 'Gespeichert',
@@ -96,13 +116,11 @@ function EntryModal({
           />
           <Select
             label="Angebot / Auftragsbestätigung"
-            description="Stunden vor der Auftragsbestätigung auf das Angebot buchen – die Auswertung weist sie getrennt aus"
-            inputWrapperOrder={['label', 'input', 'description', 'error']}
             required
             searchable
             data={documents}
             value={form.document_id ? String(form.document_id) : null}
-            onChange={(v) => set({ document_id: v ? Number(v) : 0 })}
+            onChange={(v) => set({ document_id: v ? Number(v) : 0, offer_phase: isOfferPhase(docList.find((d) => String(d.id) === v)) })}
             placeholder="Angebot oder Auftrag wählen"
             nothingFoundMessage="Kein Dokument gefunden"
           />
@@ -110,7 +128,13 @@ function EntryModal({
             <DateField label="Datum" required value={form.date} onChange={(v) => v && set({ date: v })} />
             <DecimalInput label="Stunden" required scale={2} placeholder="z. B. 1,5" value={form.hours || null} onChange={(h) => set({ hours: h })} data-autofocus={!!form.person_id} />
           </SimpleGrid>
-          <Textarea label="Notiz" description="Was wurde gemacht? (optional)" minRows={2} value={form.note} onChange={(e) => set({ note: e.currentTarget.value })} inputWrapperOrder={['label', 'input', 'description', 'error']} />
+          <Switch
+            label="Angebotsphase"
+            description="Arbeit an der Erstellung des Angebots – wird in der Auswertung getrennt ausgewiesen"
+            checked={form.offer_phase}
+            onChange={(e) => set({ offer_phase: e.currentTarget.checked })}
+          />
+          <Textarea label="Notiz" description="Was wurde gemacht? (optional)" minRows={2} value={form.note} onChange={(e) => set({ note: e.currentTarget.value })} />
           <Group justify="flex-end" mt="sm">
             <Button variant="default" onClick={onClose}>
               Abbrechen
@@ -225,17 +249,17 @@ function PeopleModal({ opened, onClose, people }: { opened: boolean; onClose: ()
   );
 }
 
-function PeopleTable({ list, total, showQuote }: { list: PersonHours[]; total: number; showQuote: boolean }) {
+function PeopleTable({ list, total, showOffer }: { list: PersonHours[]; total: number; showOffer: boolean }) {
   return (
     <Table verticalSpacing="xs">
       <Table.Thead>
         <Table.Tr>
           <Table.Th>Person</Table.Th>
           <Table.Th ta="right">Stunden</Table.Th>
-          {showQuote && (
+          {showOffer && (
             <Table.Th ta="right">
-              <Tooltip label="Davon auf dem Angebot gebucht (Angebotserstellung)">
-                <span>davon Angebot</span>
+              <Tooltip label="Davon in der Angebotsphase gearbeitet">
+                <span>davon Angebotsphase</span>
               </Tooltip>
             </Table.Th>
           )}
@@ -249,9 +273,9 @@ function PeopleTable({ list, total, showQuote }: { list: PersonHours[]; total: n
             <Table.Td ta="right" className="tabular">
               {hours(p.hours)}
             </Table.Td>
-            {showQuote && (
-              <Table.Td ta="right" className="tabular" c={p.quote_hours > 0 ? undefined : 'dimmed'}>
-                {p.quote_hours > 0 ? hours(p.quote_hours) : '–'}
+            {showOffer && (
+              <Table.Td ta="right" className="tabular" c={p.offer_hours > 0 ? undefined : 'dimmed'}>
+                {p.offer_hours > 0 ? hours(p.offer_hours) : '–'}
               </Table.Td>
             )}
             <Table.Td>
@@ -270,56 +294,53 @@ function PeopleTable({ list, total, showQuote }: { list: PersonHours[]; total: n
 }
 
 function ReportTab({ report }: { report: TimeReport | undefined }) {
-  if (!report || report.documents.length === 0) {
+  if (!report || report.projects.length === 0) {
     return <Empty icon={<IconClock size={22} />} title="Keine Stunden im gewählten Zeitraum" description="Erfassen Sie Stunden, um die Auswertung zu sehen." />;
   }
   return (
     <Stack gap="md">
-      <SectionCard title="Stunden je Person" description="Über alle Projekte der Auswahl – die Grundlage für die Verteilung des Gewinns. Ein Angebot zählt mit seinem Auftrag als ein Projekt.">
-        <PeopleTable list={report.people} total={report.total} showQuote={report.quote_hours > 0} />
+      <SectionCard title="Stunden je Person" description="Über alle Projekte der Auswahl – die Grundlage für die Verteilung des Gewinns. Ein Projekt ist ein Angebot mit allem, was daraus entstanden ist.">
+        <PeopleTable list={report.people} total={report.total} showOffer={report.offer_hours > 0} />
       </SectionCard>
-      {report.documents.map((d) => (
-        <SectionCard
-          key={d.document_id}
-          title={
-            <Group gap="xs" wrap="nowrap">
-              <Text fw={650} truncate>
-                {documentLabel(d.number, d.title, d.contact_name)}
-              </Text>
-              {d.doc_type === 'quote' ? (
-                <Badge size="sm" variant="light" color="gray">
-                  Angebot · noch kein Auftrag
-                </Badge>
-              ) : (
-                <Badge size="sm" variant="light" color="teal">
-                  Auftrag
-                </Badge>
-              )}
-            </Group>
-          }
-          actions={
-            <Stack gap={0} align="flex-end">
-              <Text fw={650} className="tabular">
-                {hours(d.total)}
-              </Text>
-              {d.quote_hours > 0 && d.doc_type !== 'quote' && (
-                <Text size="xs" c="dimmed" className="tabular">
-                  davon Angebotserstellung {hours(d.quote_hours)}
+      {report.projects.map((p) => {
+        const state = projectState(p);
+        return (
+          <SectionCard
+            key={p.document_id}
+            title={
+              <Group gap="xs" wrap="nowrap">
+                <Text fw={650} truncate>
+                  {documentLabel(p.number, p.title, p.contact_name)}
                 </Text>
-              )}
-            </Stack>
-          }
-        >
-          <PeopleTable list={d.people} total={d.total} showQuote={d.quote_hours > 0 && d.doc_type !== 'quote'} />
-        </SectionCard>
-      ))}
+                <Badge size="sm" variant="light" color={state.color}>
+                  {state.label}
+                </Badge>
+              </Group>
+            }
+            actions={
+              <Stack gap={0} align="flex-end">
+                <Text fw={650} className="tabular">
+                  {hours(p.total)}
+                </Text>
+                {p.offer_hours > 0 && (
+                  <Text size="xs" c="dimmed" className="tabular">
+                    davon Angebotsphase {hours(p.offer_hours)}
+                  </Text>
+                )}
+              </Stack>
+            }
+          >
+            <PeopleTable list={p.people} total={p.total} showOffer={p.offer_hours > 0} />
+          </SectionCard>
+        );
+      })}
     </Stack>
   );
 }
 
 export function TimePage() {
   const { data: people } = useApi<Person[]>('/people');
-  const documents = useDocumentOptions();
+  const { options: documents, documents: docList } = useDocumentOptions();
   const [range, setRange] = useState<[string | null, string | null]>([null, null]);
   const [personId, setPersonId] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -338,7 +359,10 @@ export function TimePage() {
   const allPeople = people ?? [];
   const activePeople = allPeople.filter((p) => !p.archived);
   const openNew = () => {
-    setEditing({ ...emptyEntry(last.person || (activePeople.length === 1 ? activePeople[0].id : 0), last.document) });
+    setEditing({
+      ...emptyEntry(last.person || (activePeople.length === 1 ? activePeople[0].id : 0), last.document),
+      offer_phase: isOfferPhase(docList.find((d) => d.id === last.document)),
+    });
     setEntryOpen(true);
   };
   const openEdit = (e: TimeEntry) => {
@@ -349,8 +373,8 @@ export function TimePage() {
   return (
     <Page>
       <PageHeader
-        title="Zeiterfassung"
-        subtitle="Wer hat wie viele Stunden an welchem Angebot gearbeitet?"
+        title="Projektstunden"
+        subtitle="Wer hat wie viele Stunden an welchem Projekt gearbeitet?"
         actions={
           <>
             <Button variant="default" leftSection={<IconUsers size={16} />} onClick={() => setPeopleOpen(true)}>
@@ -361,7 +385,7 @@ export function TimePage() {
               leftSection={<IconFileExport size={16} />}
               disabled={!entries?.length}
               onClick={() =>
-                exportCsv('Zeiterfassung', entries ?? [], [
+                exportCsv('Projektstunden', entries ?? [], [
                   { label: 'Datum', value: (e) => e.entry.date },
                   { label: 'Person', value: (e) => e.person_name },
                   { label: 'Art', value: (e) => DOC_TYPES[e.document_type as DocType]?.singular ?? '' },
@@ -369,6 +393,7 @@ export function TimePage() {
                   { label: 'Titel', value: (e) => e.document_title },
                   { label: 'Kunde', value: (e) => e.contact_name },
                   { label: 'Stunden', value: (e) => e.entry.hours },
+                  { label: 'Angebotsphase', value: (e) => (e.entry.offer_phase ? 'ja' : 'nein') },
                   { label: 'Notiz', value: (e) => e.entry.note },
                 ])
               }
@@ -420,10 +445,10 @@ export function TimePage() {
                   records={entries ?? []}
                   idAccessor={(r) => r.entry.id}
                   fetching={isFetching}
-                  defaultSort={{ column: 'date', direction: 'desc' }}
+                  defaultSort={{ column: 'entry.date', direction: 'desc' }}
                   onRowClick={(r) => openEdit(r.entry)}
                   columns={[
-                    { accessor: 'date', title: 'Datum', sortable: true, width: 110, render: (r) => date(r.entry.date) },
+                    { accessor: 'entry.date', title: 'Datum', sortable: true, width: 110, render: (r) => date(r.entry.date) },
                     { accessor: 'person_name', title: 'Person', sortable: true },
                     {
                       accessor: 'document_number',
@@ -436,6 +461,11 @@ export function TimePage() {
                           <Text size="sm" lineClamp={1}>
                             {documentLabel(r.document_number, r.document_title, r.contact_name)}
                           </Text>
+                          {r.entry.offer_phase && (
+                            <Badge size="xs" variant="outline" color="gray">
+                              Angebotsphase
+                            </Badge>
+                          )}
                         </Group>
                       ),
                     },

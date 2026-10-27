@@ -53,7 +53,7 @@ export const router = createBrowserRouter([
           { path: 'belege/:id', lazy: page(receiptEditor, (m) => <m.ReceiptEditorPage />) },
           { path: 'kontakte', lazy: page(() => import('./pages/contacts/ContactsPage'), (m) => <m.ContactsPage />) },
           { path: 'kontakte/:id', lazy: page(() => import('./pages/contacts/ContactDetailPage'), (m) => <m.ContactDetailPage />) },
-          { path: 'zeiterfassung', lazy: page(() => import('./pages/time/TimePage'), (m) => <m.TimePage />) },
+          { path: 'projektstunden', lazy: page(() => import('./pages/time/TimePage'), (m) => <m.TimePage />) },
           { path: 'artikel', lazy: page(() => import('./pages/articles/ArticlesPage'), (m) => <m.ArticlesPage />) },
           { path: 'bank', lazy: page(() => import('./pages/banking/BankPage'), (m) => <m.BankPage />) },
           { path: 'kasse', lazy: page(() => import('./pages/cashbook/CashbookPage'), (m) => <m.CashbookPage />) },

@@ -91,6 +91,7 @@ function useNavSections(counts: { overdue: number; transactions: number; drafts:
         { label: 'Rechnungen', to: '/rechnungen', icon: IconFileInvoice, badge: counts.drafts, badgeColor: 'gray' },
         { label: 'Gutschriften', to: '/gutschriften', icon: IconReceiptRefund },
         { label: 'Offene Posten', to: '/offene-posten', icon: IconAlertTriangle, badge: counts.overdue, badgeColor: 'red' },
+        { label: 'Projektstunden', to: '/projektstunden', icon: IconClock },
       ],
     },
     {
@@ -106,7 +107,6 @@ function useNavSections(counts: { overdue: number; transactions: number; drafts:
       items: [
         { label: 'Kontakte', to: '/kontakte', icon: IconAddressBook },
         { label: 'Produkte & Leistungen', to: '/artikel', icon: IconPackage },
-        { label: 'Zeiterfassung', to: '/zeiterfassung', icon: IconClock },
       ],
     },
     {

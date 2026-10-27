@@ -6,6 +6,6 @@
 
 export type PersonHours = { person_id: number, name: string, hours: number, 
 /**
- * Of which booked on a quote (preparing the offer).
+ * Of which worked while preparing the offer.
  */
-quote_hours: number, };
+offer_hours: number, };

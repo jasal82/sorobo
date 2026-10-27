@@ -7,4 +7,8 @@
 /**
  * Hours a person worked on a document (quote, order, …).
  */
-export type TimeEntry = { id: number, person_id: number, document_id: number, date: string, hours: number, note: string, created_at: string, updated_at: string, };
+export type TimeEntry = { id: number, person_id: number, document_id: number, date: string, hours: number, 
+/**
+ * Worked while preparing the offer, not on the project itself.
+ */
+offer_phase: boolean, note: string, created_at: string, updated_at: string, };

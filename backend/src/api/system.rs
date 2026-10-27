@@ -556,22 +556,28 @@ pub struct ResetRequest {
     pub confirm: String,
 }
 
+/// Every table of the schema except `meta`, children before the tables they reference.
+const WIPED_TABLES: &[&str] = &[
+    "document_archive", "debit_run_items", "debit_runs", "mandates", "payment_run_items", "payment_runs", "recurring_invoices", "bank_rules", "journal_lines", "journal_entries", "allocations", "transactions", "dunnings", "document_lines", "time_entries", "documents", "people", "receipt_lines",
+    "receipts", "assets", "manual_entries", "payment_accounts", "articles", "contacts", "activities", "ustva_filings", "zm_filings", "files",
+    "number_ranges", "layouts", "accounts",
+];
+
+/// "Alle Daten löschen": empties the database and seeds the defaults again.
+fn wipe_data(c: &rusqlite::Connection) -> anyhow::Result<()> {
+    for t in WIPED_TABLES {
+        c.execute(&format!("DELETE FROM {t}"), [])?;
+    }
+    c.execute("DELETE FROM meta WHERE key != 'schema_version'", [])?;
+    cfg::ensure_seeded(c)?;
+    Ok(())
+}
+
 pub async fn reset(State(st): State<AppState>, Json(req): Json<ResetRequest>) -> ApiResult<SystemStatus> {
     if req.confirm != "LÖSCHEN" {
         return Err(AppError::bad("Bitte zur Bestätigung LÖSCHEN eingeben."));
     }
-    st.write(|c| {
-        for t in [
-            "document_archive", "debit_run_items", "debit_runs", "mandates", "payment_run_items", "payment_runs", "recurring_invoices", "bank_rules", "journal_lines", "journal_entries", "allocations", "transactions", "dunnings", "document_lines", "documents", "receipt_lines",
-            "receipts", "assets", "manual_entries", "payment_accounts", "articles", "contacts", "activities", "ustva_filings", "zm_filings", "files",
-            "number_ranges", "layouts", "accounts",
-        ] {
-            c.execute(&format!("DELETE FROM {t}"), [])?;
-        }
-        c.execute("DELETE FROM meta WHERE key != 'schema_version'", [])?;
-        cfg::ensure_seeded(c)?;
-        Ok(())
-    })?;
+    st.write(wipe_data)?;
     let _ = std::fs::remove_dir_all(st.files_dir());
     let _ = std::fs::create_dir_all(st.files_dir());
     status(State(st)).await
@@ -699,6 +705,32 @@ mod tests {
         sandbox_upload(&mut resp, mime);
         let get = |n: header::HeaderName| resp.headers().get(n).map(|v| v.to_str().unwrap().to_string());
         (get(header::X_CONTENT_TYPE_OPTIONS), get(header::CONTENT_SECURITY_POLICY))
+    }
+
+    #[test]
+    fn the_reset_covers_every_table_and_works_with_hours_booked() {
+        let conn = db::open_memory();
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'meta'")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        for t in &tables {
+            assert!(WIPED_TABLES.contains(&t.as_str()), "the reset does not clear {t}");
+        }
+        cfg::ensure_seeded(&conn).unwrap();
+        conn.execute("INSERT INTO contacts (company) VALUES ('Kunde GmbH')", []).unwrap();
+        conn.execute("INSERT INTO documents (doc_type, date, number) VALUES ('quote', '2026-01-10', 'AN-TEST')", []).unwrap();
+        let doc = conn.last_insert_rowid();
+        let person = crate::services::timetracking::save_person(&conn, Person { name: "Anna".into(), ..Default::default() }).unwrap();
+        let entry = TimeEntry { person_id: person.id, document_id: doc, date: "2026-01-12".parse().unwrap(), hours: rust_decimal_macros::dec!(2), ..Default::default() };
+        crate::services::timetracking::save_entry(&conn, entry).unwrap();
+        wipe_data(&conn).unwrap();
+        for t in ["documents", "people", "time_entries"] {
+            assert_eq!(db::scalar_i64(&conn, &format!("SELECT COUNT(*) FROM {t}"), &[]).unwrap(), 0, "{t}");
+        }
     }
 
     #[test]

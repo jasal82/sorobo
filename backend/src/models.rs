@@ -822,6 +822,8 @@ entity! {
         pub date: NaiveDate,
         #[ts(type = "number")]
         pub hours: Decimal,
+        /// Worked while preparing the offer, not on the project itself.
+        pub offer_phase: bool,
         pub note: String,
         pub created_at: String,
         pub updated_at: String,
