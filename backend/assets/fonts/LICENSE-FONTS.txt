@@ -1,8 +1,8 @@
 Schriften in diesem Ordner
 ==========================
 
-Die folgenden Schriften werden in die PDF-Erzeugung von Sqonto eingebettet. Sie stehen nicht unter
-der Lizenz von Sqonto (AGPL-3.0), sondern jeweils unter der SIL Open Font License, Version 1.1
+Die folgenden Schriften werden in die PDF-Erzeugung von Sorobo eingebettet. Sie stehen nicht unter
+der Lizenz von Sorobo (AGPL-3.0), sondern jeweils unter der SIL Open Font License, Version 1.1
 (Text unten).
 
 - Fira Sans: Digitized data copyright 2012-2016, The Mozilla Foundation and Telefonica S.A.

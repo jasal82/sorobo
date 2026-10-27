@@ -83,28 +83,62 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         env:
-          SQONTO_FRONTEND_READY: '1'
+          SOROBO_FRONTEND_READY: '1'
         run: build.cmd
+      - name: Download the last setup from before the rename
+        # The program was called Sqonto until version 0.10; the installer test also upgrades
+        # such an installation.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v0.10.0 --repo "${{ github.repository }}" --pattern 'Sqonto-0.10.0-windows-x64-setup.exe' --dir dist/previous
       - name: Test Windows installer lifecycle
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/test-installer.ps1
+        run: ./scripts/test-installer.ps1 -PreviousInstaller dist/previous/Sqonto-0.10.0-windows-x64-setup.exe
       - name: Package Windows portable binaries
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $version = node scripts/version.mjs
-          Compress-Archive -Path dist/Sqonto.exe, dist/sqonto-server.exe, dist/LICENSE.txt, dist/THIRD-PARTY-LICENSES.txt -DestinationPath "dist/packages/Sqonto-$version-windows-x64-portable.zip"
+          Compress-Archive -Path dist/Sorobo.exe, dist/sorobo-server.exe, dist/LICENSE.txt, dist/THIRD-PARTY-LICENSES.txt -DestinationPath "dist/packages/Sorobo-$version-windows-x64-portable.zip"
+      - name: Package Windows binaries for installations from before the rename
+        # Versions until 0.10 (Sqonto) look for Sqonto-<version>-… packages and replace the
+        # programs under their former names. Keep this for a few releases after the rename;
+        # backend/src/services/update.rs reads both names.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = node scripts/version.mjs
+          Copy-Item "dist/packages/Sorobo-$version-windows-x64-setup.exe" "dist/packages/Sqonto-$version-windows-x64-setup.exe"
+          $legacy = (New-Item -ItemType Directory -Force dist/legacy).FullName
+          Copy-Item dist/Sorobo.exe "$legacy/Sqonto.exe"
+          Copy-Item dist/sorobo-server.exe "$legacy/sqonto-server.exe"
+          Copy-Item dist/LICENSE.txt, dist/THIRD-PARTY-LICENSES.txt $legacy
+          Compress-Archive -Path "$legacy/Sqonto.exe", "$legacy/sqonto-server.exe", "$legacy/LICENSE.txt", "$legacy/THIRD-PARTY-LICENSES.txt" -DestinationPath "dist/packages/Sqonto-$version-windows-x64-portable.zip"
       - name: Build and package Unix binaries
         if: runner.os != 'Windows'
         env:
-          SQONTO_FRONTEND_READY: '1'
+          SOROBO_FRONTEND_READY: '1'
         run: sh build.sh
+      - name: Package Unix binaries for installations from before the rename
+        # See the Windows step above.
+        if: runner.os != 'Windows'
+        run: |
+          version=$(node scripts/version.mjs)
+          platform=$(uname -s | tr '[:upper:]' '[:lower:]')
+          arch=$(uname -m)
+          mkdir -p dist/legacy
+          cp dist/sorobo dist/legacy/sqonto
+          cp dist/sorobo-server dist/legacy/sqonto-server
+          cp dist/LICENSE.txt dist/THIRD-PARTY-LICENSES.txt dist/legacy/
+          tar -czf "dist/packages/Sqonto-$version-$platform-$arch.tar.gz" -C dist/legacy sqonto sqonto-server LICENSE.txt THIRD-PARTY-LICENSES.txt
       - name: Test server-only configuration
         # Feature changes require some distinct artifacts. Check this once, after
         # packaging, so it cannot replace the binaries being shipped.
         if: runner.os == 'Linux'
-        run: cargo test --locked --release --manifest-path backend/Cargo.toml --no-default-features --lib --bin sqonto-server
+        run: cargo test --locked --release --manifest-path backend/Cargo.toml --no-default-features --lib --bin sorobo-server
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
@@ -137,7 +171,7 @@ jobs:
           sha256sum -- * > SHA256SUMS.txt
           # A failed upload leaves a draft; publish only after all assets are present.
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --verify-tag --draft --title "Sqonto $RELEASE_TAG" --generate-notes
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "Sorobo $RELEASE_TAG" --generate-notes
           fi
           gh release upload "$RELEASE_TAG" --clobber -- *
           gh release edit "$RELEASE_TAG" --draft=false

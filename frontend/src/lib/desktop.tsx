@@ -8,20 +8,20 @@ import { notifications } from '@mantine/notifications';
 import { IconFolderOpen } from '@tabler/icons-react';
 
 /**
- * Bridge to the desktop app (`sqonto-desktop`, native window around the same frontend).
+ * Bridge to the desktop app (`sorobo-desktop`, native window around the same frontend).
  * In the browser all of this is inactive.
  */
 declare global {
   interface Window {
-    __SQONTO_DESKTOP__?: boolean;
+    __SOROBO_DESKTOP__?: boolean;
     /** Asked by the desktop window before closing: number of editors with unsaved changes. */
-    __sqontoUnsaved?: () => number;
+    __soroboUnsaved?: () => number;
     /** Called by the desktop window after a download was saved. */
-    __sqontoDownloaded?: (path: string) => void;
+    __soroboDownloaded?: (path: string) => void;
     /** Set by the desktop window when the page draws the title bar (Windows). */
-    __SQONTO_TITLEBAR__?: boolean;
+    __SOROBO_TITLEBAR__?: boolean;
     /** Called by the desktop window when it is maximized/restored or (de)activated. */
-    __sqontoWindowState?: (state: WindowState) => void;
+    __soroboWindowState?: (state: WindowState) => void;
     ipc?: { postMessage: (message: string) => void };
   }
 }
@@ -34,12 +34,12 @@ export const shortcutLabel = (key: string, modifier: 'mod' | 'alt') => {
   return modifier === 'mod' ? `Strg + ${key}` : `Alt+${key}`;
 };
 
-export const isDesktop = typeof window !== 'undefined' && !!window.__SQONTO_DESKTOP__;
+export const isDesktop = typeof window !== 'undefined' && !!window.__SOROBO_DESKTOP__;
 
 // ---------------------------------------------------------------- Title bar (Windows)
 
 /** The window has no native frame: the page draws the title bar. */
-export const hasTitlebar = isDesktop && !!window.__SQONTO_TITLEBAR__;
+export const hasTitlebar = isDesktop && !!window.__SOROBO_TITLEBAR__;
 
 export interface WindowState {
   maximized: boolean;
@@ -164,14 +164,14 @@ export function useLeaveWarning(when: boolean) {
 }
 
 export function installDesktopBridge() {
-  window.__sqontoUnsaved = () => unsaved;
+  window.__soroboUnsaved = () => unsaved;
   if (!isDesktop) return;
   if (hasTitlebar) {
-    window.__sqontoWindowState = (state) => setStore(windowState, state);
+    window.__soroboWindowState = (state) => setStore(windowState, state);
     document.documentElement.dataset.titlebar = '';
     windowCommand('state');
   }
-  window.__sqontoDownloaded = (path) => {
+  window.__soroboDownloaded = (path) => {
     const name = path.split(/[\\/]/).pop() ?? path;
     const id = `download-${path}`;
     notifications.show({

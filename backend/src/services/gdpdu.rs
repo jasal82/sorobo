@@ -587,7 +587,7 @@ fn index_xml(conn: &Connection, tables: &[Table], from: NaiveDate, to: NaiveDate
     let c = &s.company;
     let location = [format!("{} {}", c.zip, c.city).trim().to_string(), c.country.clone()].into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(", ");
     let comment = format!(
-        "Datenträgerüberlassung nach § 147 Abs. 6 AO für den Zeitraum {} bis {}. Erstellt am {} mit Sqonto {}.",
+        "Datenträgerüberlassung nach § 147 Abs. 6 AO für den Zeitraum {} bis {}. Erstellt am {} mit Sorobo {}.",
         date(from),
         date(to),
         now_str(),

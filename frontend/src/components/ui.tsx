@@ -270,9 +270,9 @@ export function UnsavedChangesGuard({ when, onSave, allow }: { when: boolean; on
 }
 
 /** App mark – the same "S" as the program icon and favicon. */
-export function SqontoLogo({ size = 32 }: { size?: number }) {
+export function SoroboLogo({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="Sqonto" style={{ flexShrink: 0, display: 'block' }}>
+    <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="Sorobo" style={{ flexShrink: 0, display: 'block' }}>
       <rect width="64" height="64" rx="14" fill="#2552eb" />
       <path
         d="M42.5 23.2C40.6 20.9 37 19.6 32.4 19.6C26.6 19.6 22.8 22.3 22.8 26.2C22.8 30.4 26.6 31.6 32 32.6C37.5 33.6 41.4 34.9 41.4 39.1C41.4 43.1 37.6 45.6 32 45.6C27.2 45.6 23.4 44 21.2 41.2"

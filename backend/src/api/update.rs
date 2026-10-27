@@ -66,10 +66,10 @@ fn run_install(st: AppState) {
     std::thread::sleep(Duration::from_millis(800));
     let _db = st.db();
     if let Err(e) = command.spawn() {
-        update::fail(format!("{} konnte nicht gestartet werden ({e}). Bitte Sqonto beenden und neu starten.", command.get_program().to_string_lossy()));
+        update::fail(format!("{} konnte nicht gestartet werden ({e}). Bitte Sorobo beenden und neu starten.", command.get_program().to_string_lossy()));
         return;
     }
-    tracing::info!("Update wird abgeschlossen, Sqonto startet neu");
+    tracing::info!("Update wird abgeschlossen, Sorobo startet neu");
     crate::quit();
     // The desktop app ends from its event loop; should it not, end here.
     std::thread::sleep(Duration::from_secs(10));

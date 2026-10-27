@@ -3,25 +3,25 @@
 # See LICENSE in the project root for the full license and warranty disclaimer.
 
 [package]
-name = "sqonto"
+name = "sorobo"
 version = "0.10.0"
 edition = "2024"
-description = "Sqonto – lokale Buchhaltungs- und Rechnungssoftware"
+description = "Sorobo – lokale Buchhaltungs- und Rechnungssoftware"
 license = "AGPL-3.0-or-later"
-default-run = "sqonto-server"
+default-run = "sorobo-server"
 
 [lib]
 path = "src/lib.rs"
 
 # Headless server (browser / Vite dev server)
 [[bin]]
-name = "sqonto-server"
+name = "sorobo-server"
 path = "src/main.rs"
 
 # Desktop app: native window around the same server
 [[bin]]
-name = "sqonto-desktop"
-path = "src/bin/sqonto-desktop.rs"
+name = "sorobo-desktop"
+path = "src/bin/sorobo-desktop.rs"
 required-features = ["desktop"]
 
 [features]

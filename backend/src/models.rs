@@ -1086,7 +1086,7 @@ impl Default for UpdateSettings {
 #[serde(default)]
 #[ts(export)]
 pub struct EmailSettings {
-    /// Send documents from Sqonto (otherwise the mail program is opened).
+    /// Send documents from Sorobo (otherwise the mail program is opened).
     pub enabled: bool,
     pub host: String,
     pub port: i64,

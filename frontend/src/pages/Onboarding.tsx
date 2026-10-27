@@ -29,7 +29,7 @@ import {
 import { IconArrowRight, IconBuildingStore, IconCheck, IconRocket, IconSparkles } from '@tabler/icons-react';
 import { api } from '@/api/client';
 import { notifyError, useSettings, useStatus } from '@/api/hooks';
-import { SqontoLogo } from '@/components/ui';
+import { SoroboLogo } from '@/components/ui';
 import type { Settings, SystemStatus } from '@/api/types';
 import { MoneyInput } from '@/components/inputs';
 import { BOOKKEEPING, COUNTRIES } from '@/lib/labels';
@@ -92,9 +92,9 @@ export function OnboardingPage() {
     <Box mih="100vh" bg="var(--app-bg)" py={40} px="md">
       <Box maw={860} mx="auto">
         <Group gap="sm" mb="xl">
-          <SqontoLogo size={40} />
+          <SoroboLogo size={40} />
           <div>
-            <Title order={2}>Willkommen bei Sqonto</Title>
+            <Title order={2}>Willkommen bei Sorobo</Title>
             <Text c="dimmed" size="sm">
               Rechnungen, Belege und Buchhaltung – lokal auf Ihrem Rechner.
             </Text>

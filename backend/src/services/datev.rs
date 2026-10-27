@@ -44,7 +44,7 @@ pub fn export(conn: &Connection, from: NaiveDate, to: NaiveDate, advisor: &str, 
     let mut out = String::new();
     let now = Local::now();
     out.push_str(&format!(
-        "\"EXTF\";700;21;\"Buchungsstapel\";13;{};;\"SQ\";\"Sqonto\";\"\";{};{};{};4;{};{};\"Sqonto Buchungsstapel\";\"\";1;0;0;\"EUR\";;\"\";;;\"{}\";;;\"\";\"\"\r\n",
+        "\"EXTF\";700;21;\"Buchungsstapel\";13;{};;\"SO\";\"Sorobo\";\"\";{};{};{};4;{};{};\"Sorobo Buchungsstapel\";\"\";1;0;0;\"EUR\";;\"\";;;\"{}\";;;\"\";\"\"\r\n",
         now.format("%Y%m%d%H%M%S000"),
         if advisor.is_empty() { "1001" } else { advisor },
         if client.is_empty() { "1" } else { client },

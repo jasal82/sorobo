@@ -87,8 +87,8 @@ function InstallModal({ u, down }: { u?: UpdateStatus; down: boolean }) {
             <Loader size="sm" />
             <Text size="sm">
               {seconds > 120
-                ? 'Sqonto wurde beendet, meldet sich aber noch nicht zurück. Falls es nicht von selbst startet, bitte Sqonto neu starten.'
-                : 'Sqonto wird neu gestartet – gleich geht es mit der neuen Version weiter.'}
+                ? 'Sorobo wurde beendet, meldet sich aber noch nicht zurück. Falls es nicht von selbst startet, bitte Sorobo neu starten.'
+                : 'Sorobo wird neu gestartet – gleich geht es mit der neuen Version weiter.'}
             </Text>
           </Group>
         )}
@@ -105,12 +105,12 @@ export function UpdatesTab({ s, patch }: { s: Settings; patch: Patch }) {
 
   const startInstall = () => {
     if (!u) return;
-    const unsaved = window.__sqontoUnsaved?.() ?? 0;
+    const unsaved = window.__soroboUnsaved?.() ?? 0;
     confirmAction({
-      title: `Sqonto ${u.latest} installieren`,
+      title: `Sorobo ${u.latest} installieren`,
       message: (
         <>
-          Vorher wird automatisch eine Datensicherung erstellt. Sqonto wird für das Update beendet und startet danach von selbst neu.
+          Vorher wird automatisch eine Datensicherung erstellt. Sorobo wird für das Update beendet und startet danach von selbst neu.
           {unsaved > 0 && (
             <Text component="span" display="block" mt="xs" c="orange.8" size="sm">
               Es gibt noch ungespeicherte Änderungen – sie gehen verloren, wenn Sie nicht vorher speichern.
@@ -129,7 +129,7 @@ export function UpdatesTab({ s, patch }: { s: Settings; patch: Patch }) {
       <Card>
         <Group justify="space-between" align="flex-start" mb="sm" wrap="nowrap">
           <div>
-            <Text fw={650}>Sqonto {u?.current ?? ''}</Text>
+            <Text fw={650}>Sorobo {u?.current ?? ''}</Text>
             <Text size="sm" c="dimmed">
               {u?.checked_at ? `Zuletzt geprüft: ${dateTime(u.checked_at)}` : 'Noch nicht nach Updates gesucht'}
             </Text>
@@ -151,7 +151,7 @@ export function UpdatesTab({ s, patch }: { s: Settings; patch: Patch }) {
         {u && !u.check_error && u.latest && !u.available && (
           <Group gap="xs">
             <IconCircleCheck size={18} color="var(--mantine-color-teal-6)" />
-            <Text size="sm">Sqonto ist auf dem neuesten Stand.</Text>
+            <Text size="sm">Sorobo ist auf dem neuesten Stand.</Text>
           </Group>
         )}
         {u?.available && (
@@ -205,7 +205,7 @@ export function UpdatesTab({ s, patch }: { s: Settings; patch: Patch }) {
       <Card>
         <Switch
           label="Beim Start automatisch nach Updates suchen"
-          description="Sqonto fragt beim Start und danach täglich bei GitHub nach der neuesten Version und meldet sich, wenn es eine gibt. Dabei werden keine Daten aus Ihrer Buchhaltung übertragen."
+          description="Sorobo fragt beim Start und danach täglich bei GitHub nach der neuesten Version und meldet sich, wenn es eine gibt. Dabei werden keine Daten aus Ihrer Buchhaltung übertragen."
           checked={s.updates.auto_check}
           onChange={(e) => {
             const on = e.currentTarget.checked;

@@ -59,7 +59,7 @@ import {
   IconWorld,
 } from '@tabler/icons-react';
 import { useApi, useStatus } from '@/api/hooks';
-import { SqontoLogo } from '@/components/ui';
+import { SoroboLogo } from '@/components/ui';
 import { useUpdateNotice } from '@/components/UpdateNotice';
 import { WindowControls, hasTitlebar, shortcutLabel, titlebarMouseDown, useTitlebarHost } from '@/lib/desktop';
 import type { Dashboard, SearchHit } from '@/api/types';
@@ -298,10 +298,10 @@ export function AppLayout() {
             <Burger opened={opened} onClick={toggle} hiddenFrom="md" size="sm" />
             <UnstyledButton onClick={() => navigate('/')}>
               <Group gap={10} wrap="nowrap">
-                <SqontoLogo size={32} />
+                <SoroboLogo size={32} />
                 <Box visibleFrom="xs">
                   <Text fw={700} size="md" lh={1.1}>
-                    Sqonto
+                    Sorobo
                   </Text>
                   <Text size="xs" c="dimmed" lh={1.1} maw={200} truncate>
                     {status.company_name || 'Buchhaltung'}

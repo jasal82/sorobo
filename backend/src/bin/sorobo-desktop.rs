@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // See LICENSE in the project root for the full license and warranty disclaimer.
 
-//! `sqonto-desktop` – Sqonto as a desktop application: runs the server inside the process and
+//! `sorobo-desktop` – Sorobo as a desktop application: runs the server inside the process and
 //! shows the interface in a native window (WebView2 on Windows, WebKit on macOS/Linux) – without
 //! console window and without browser.
 //!
 //! On Windows the window has no native frame: the app's header is the title bar (drawn by the
 //! frontend, see `lib/desktop.tsx`), which moves, resizes and controls the window through IPC.
 //!
-//! Development: `SQONTO_DESKTOP_URL=http://localhost:5173` shows the Vite dev server (hot reload)
-//! instead of the embedded frontend; `SQONTO_DEVTOOLS=1` enables the developer tools.
+//! Development: `SOROBO_DESKTOP_URL=http://localhost:5173` shows the Vite dev server (hot reload)
+//! instead of the embedded frontend; `SOROBO_DEVTOOLS=1` enables the developer tools.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use sqonto::Launch;
+use sorobo::Launch;
 use serde::{Deserialize, Serialize};
 use tao::dpi::{LogicalSize, PhysicalPosition};
 #[cfg(target_os = "macos")]
@@ -32,7 +32,7 @@ use wry::{NewWindowResponse, WebContext, WebView, WebViewBuilder};
 
 const WEBVIEW2_DOWNLOAD: &str = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
 /// Asks the page how many editors have unsaved changes (see `useLeaveWarning` in the frontend).
-const UNSAVED_JS: &str = "(window.__sqontoUnsaved ? window.__sqontoUnsaved() : 0)";
+const UNSAVED_JS: &str = "(window.__soroboUnsaved ? window.__soroboUnsaved() : 0)";
 
 #[derive(Debug)]
 enum UserEvent {
@@ -64,10 +64,10 @@ struct WindowState {
 }
 
 fn main() {
-    let dir = sqonto::data_dir();
+    let dir = sorobo::data_dir();
     init_logging(&dir);
-    let runtime = tokio::runtime::Runtime::new().unwrap_or_else(|e| fatal(&format!("Sqonto konnte nicht gestartet werden:\n\n{e}")));
-    let app_url = match runtime.block_on(sqonto::launch(sqonto::default_port(), &dir)) {
+    let runtime = tokio::runtime::Runtime::new().unwrap_or_else(|e| fatal(&format!("Sorobo konnte nicht gestartet werden:\n\n{e}")));
+    let app_url = match runtime.block_on(sorobo::launch(sorobo::default_port(), &dir)) {
         Ok(Launch::Started(server)) => {
             let url = server.url.clone();
             runtime.spawn(async move {
@@ -78,15 +78,15 @@ fn main() {
             url
         }
         Ok(Launch::AlreadyRunning { port, url }) => {
-            if sqonto::request_focus(port) {
+            if sorobo::request_focus(port) {
                 return;
             }
             // A headless server with the same data is running – show it in a window.
             url
         }
-        Err(e) => fatal(&format!("Sqonto konnte nicht gestartet werden:\n\n{e:#}")),
+        Err(e) => fatal(&format!("Sorobo konnte nicht gestartet werden:\n\n{e:#}")),
     };
-    let start_url = std::env::var("SQONTO_DESKTOP_URL").unwrap_or_else(|_| app_url.clone());
+    let start_url = sorobo::env_var("DESKTOP_URL").unwrap_or_else(|| app_url.clone());
     run(&dir, app_url, start_url);
 }
 
@@ -98,13 +98,13 @@ fn run(dir: &Path, app_url: String, start_url: String) -> ! {
     #[cfg(target_os = "macos")]
     let _menu = macos_menu(proxy.clone());
     let focus_proxy = Mutex::new(proxy.clone());
-    sqonto::set_focus_handler(move || {
+    sorobo::set_focus_handler(move || {
         if let Ok(p) = focus_proxy.lock() {
             let _ = p.send_event(UserEvent::Focus);
         }
     });
     let quit_proxy = Mutex::new(proxy.clone());
-    sqonto::set_quit_handler(move || {
+    sorobo::set_quit_handler(move || {
         if let Ok(p) = quit_proxy.lock() {
             let _ = p.send_event(UserEvent::Quit);
         }
@@ -123,7 +123,7 @@ fn run(dir: &Path, app_url: String, start_url: String) -> ! {
         let allowed_nav = allowed.clone();
         let downloads_ipc = downloads.clone();
         let proxy_ipc = proxy.clone();
-        let init = if CUSTOM_TITLEBAR { "window.__SQONTO_DESKTOP__ = true; window.__SQONTO_TITLEBAR__ = true;" } else { "window.__SQONTO_DESKTOP__ = true;" };
+        let init = if CUSTOM_TITLEBAR { "window.__SOROBO_DESKTOP__ = true; window.__SOROBO_TITLEBAR__ = true;" } else { "window.__SOROBO_DESKTOP__ = true;" };
         let builder = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_url(&start_url)
             .with_devtools(devtools())
@@ -188,7 +188,7 @@ fn run(dir: &Path, app_url: String, start_url: String) -> ! {
                     || ask(
                         &window,
                         "Ungespeicherte Änderungen",
-                        "Es gibt Änderungen, die noch nicht gespeichert wurden. Sqonto trotzdem beenden?",
+                        "Es gibt Änderungen, die noch nicht gespeichert wurden. Sorobo trotzdem beenden?",
                     )
                 {
                     save_state(&window, &state_file);
@@ -219,7 +219,7 @@ fn run(dir: &Path, app_url: String, start_url: String) -> ! {
             Event::UserEvent(UserEvent::Downloaded(path)) => {
                 downloads.borrow_mut().insert(path.clone());
                 let arg = serde_json::to_string(&path.display().to_string()).unwrap_or_default();
-                let _ = webview.evaluate_script(&format!("window.__sqontoDownloaded && window.__sqontoDownloaded({arg})"));
+                let _ = webview.evaluate_script(&format!("window.__soroboDownloaded && window.__soroboDownloaded({arg})"));
             }
             _ => {}
         }
@@ -246,7 +246,7 @@ fn macos_menu(proxy: EventLoopProxy<UserEvent>) -> muda::Menu {
     use muda::{accelerator::{Accelerator, Code, Modifiers}, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
     let menu = Menu::new();
     // Not the predefined item: it would end the process without the unsaved-changes check.
-    let quit = MenuItem::new("Sqonto beenden", true, Some(Accelerator::new(Some(Modifiers::META), Code::KeyQ)));
+    let quit = MenuItem::new("Sorobo beenden", true, Some(Accelerator::new(Some(Modifiers::META), Code::KeyQ)));
     let quit_id = quit.id().clone();
     let proxy = Mutex::new(proxy);
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
@@ -254,7 +254,7 @@ fn macos_menu(proxy: EventLoopProxy<UserEvent>) -> muda::Menu {
             let _ = p.send_event(UserEvent::CloseMain);
         }
     }));
-    let app = Submenu::new("Sqonto", true);
+    let app = Submenu::new("Sorobo", true);
     let edit = Submenu::new("Bearbeiten", true);
     let window = Submenu::new("Fenster", true);
     let _ = menu.append_items(&[&app, &edit, &window]);
@@ -291,7 +291,7 @@ fn set_dock_icon() {
     use objc2_app_kit::{NSApplication, NSImage};
     use objc2_foundation::NSData;
     let Some(mtm) = MainThreadMarker::new() else { return };
-    let data = NSData::with_bytes(include_bytes!("../../assets/icons/sqonto-macos-512.png"));
+    let data = NSData::with_bytes(include_bytes!("../../assets/icons/sorobo-macos-512.png"));
     if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
         // SAFETY: called on the main thread with a valid image.
         unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image)) };
@@ -300,7 +300,7 @@ fn set_dock_icon() {
 
 fn main_window(event_loop: &EventLoop<UserEvent>, state_file: &Path) -> Result<Window, tao::error::OsError> {
     let saved: Option<WindowState> = std::fs::read(state_file).ok().and_then(|b| serde_json::from_slice(&b).ok());
-    let mut builder = WindowBuilder::new().with_title("Sqonto").with_min_inner_size(LogicalSize::new(900.0, 600.0)).with_window_icon(app_icon());
+    let mut builder = WindowBuilder::new().with_title("Sorobo").with_min_inner_size(LogicalSize::new(900.0, 600.0)).with_window_icon(app_icon());
     #[cfg(windows)]
     {
         // Without frame, but with the shadow, the rounded corners (Windows 11) and the invisible
@@ -334,7 +334,7 @@ fn popup(
     last_dir: Rc<RefCell<Option<PathBuf>>>,
 ) -> Result<(Window, WebView), Box<dyn std::error::Error>> {
     let window = WindowBuilder::new()
-        .with_title(if url.contains("/pdf") { "Sqonto – PDF" } else { "Sqonto" })
+        .with_title(if url.contains("/pdf") { "Sorobo – PDF" } else { "Sorobo" })
         .with_inner_size(LogicalSize::new(980.0, 1100.0))
         .with_window_icon(app_icon())
         .build(target)?;
@@ -355,7 +355,7 @@ fn popup(
 /// Tells the page whether the window is maximized (restore button, no resize edge) and active.
 fn send_window_state(window: &Window, webview: &WebView) {
     let script = format!(
-        "window.__sqontoWindowState && window.__sqontoWindowState({{ maximized: {}, focused: {} }})",
+        "window.__soroboWindowState && window.__soroboWindowState({{ maximized: {}, focused: {} }})",
         window.is_maximized(),
         window.is_focused()
     );
@@ -465,7 +465,7 @@ fn port_of(url: &str) -> &str {
 }
 
 fn devtools() -> bool {
-    cfg!(debug_assertions) || std::env::var("SQONTO_DEVTOOLS").is_ok()
+    cfg!(debug_assertions) || sorobo::env_var("DEVTOOLS").is_some()
 }
 
 fn app_icon() -> Option<Icon> {
@@ -481,7 +481,7 @@ fn app_icon() -> Option<Icon> {
 /// Log file in the data directory – there is no console.
 fn init_logging(dir: &Path) {
     let _ = std::fs::create_dir_all(dir);
-    match std::fs::File::create(dir.join("sqonto.log")) {
+    match std::fs::File::create(dir.join("sorobo.log")) {
         Ok(file) => tracing_subscriber::fmt().with_target(false).with_ansi(false).with_writer(Mutex::new(file)).init(),
         Err(_) => tracing_subscriber::fmt().with_target(false).init(),
     }
@@ -500,7 +500,7 @@ fn ask(window: &Window, title: &str, text: &str) -> bool {
 
 fn fatal(message: &str) -> ! {
     tracing::error!("{message}");
-    rfd::MessageDialog::new().set_level(rfd::MessageLevel::Error).set_title("Sqonto").set_description(message).show();
+    rfd::MessageDialog::new().set_level(rfd::MessageLevel::Error).set_title("Sorobo").set_description(message).show();
     std::process::exit(1)
 }
 
@@ -508,9 +508,9 @@ fn webview_missing(e: &wry::Error) -> ! {
     tracing::error!("WebView: {e}");
     let install = rfd::MessageDialog::new()
         .set_level(rfd::MessageLevel::Error)
-        .set_title("Sqonto")
+        .set_title("Sorobo")
         .set_description(format!(
-            "Die Anzeige konnte nicht gestartet werden ({e}).\n\nSqonto benötigt die „Microsoft Edge WebView2 Runtime“, die unter Windows 10/11 normalerweise vorinstalliert ist. Jetzt herunterladen?"
+            "Die Anzeige konnte nicht gestartet werden ({e}).\n\nSorobo benötigt die „Microsoft Edge WebView2 Runtime“, die unter Windows 10/11 normalerweise vorinstalliert ist. Jetzt herunterladen?"
         ))
         .set_buttons(rfd::MessageButtons::YesNo)
         .show()

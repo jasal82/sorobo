@@ -67,7 +67,7 @@ import { api, apiUrl, downloadFile } from '@/api/client';
 import { notifyError, useAction, useApi, useChart, useLayouts, usePaymentAccounts, useSettings, useStatus } from '@/api/hooks';
 import type { BackupStatus, BankRule, DocumentListItem, FileMeta, Layout, MessageResponse, NumberRange, PaymentAccount, Settings, TransactionView } from '@/api/types';
 import { AccountSelect, DateField, MoneyInput } from '@/components/inputs';
-import { Page, PageHeader, SqontoLogo, UnsavedChangesGuard, confirmAction } from '@/components/ui';
+import { Page, PageHeader, SoroboLogo, UnsavedChangesGuard, confirmAction } from '@/components/ui';
 import { date, dateTime, money, today } from '@/lib/format';
 import { BOOKKEEPING, COUNTRIES, EINVOICE_FORMATS } from '@/lib/labels';
 import { creditorIdValid } from '@/lib/sepa';
@@ -791,7 +791,7 @@ function EmailTab({ s, patch }: { s: Settings; patch: Patch }) {
           E-Mail-Versand
         </Text>
         <Text size="sm" c="dimmed" mb="sm">
-          Dokumente direkt aus Sqonto versenden – mit PDF im Anhang, bei Kunden mit XRechnung zusätzlich mit der XML-Datei. Ohne eigenen Versand öffnet „Senden“ Ihr E-Mail-Programm.
+          Dokumente direkt aus Sorobo versenden – mit PDF im Anhang, bei Kunden mit XRechnung zusätzlich mit der XML-Datei. Ohne eigenen Versand öffnet „Senden“ Ihr E-Mail-Programm.
         </Text>
         <Switch label="E-Mails über den eigenen E-Mail-Server senden" checked={e.enabled} onChange={(ev) => set({ enabled: ev.currentTarget.checked })} />
       </Card>
@@ -822,7 +822,7 @@ function EmailTab({ s, patch }: { s: Settings; patch: Patch }) {
           />
         </SimpleGrid>
         <Text size="xs" c="dimmed" mt="xs">
-          Das Passwort wird lokal in der Sqonto-Datenbank gespeichert und ist damit auch in Datensicherungen enthalten.
+          Das Passwort wird lokal in der Sorobo-Datenbank gespeichert und ist damit auch in Datensicherungen enthalten.
         </Text>
       </Card>
       <Card>
@@ -919,7 +919,7 @@ function AutoBackupCard({ s, patch }: { s: Settings; patch: Patch }) {
         <Text fw={650}>Automatische Sicherung</Text>
       </Group>
       <Text size="sm" c="dimmed" mb="sm">
-        Sqonto legt einmal täglich eine vollständige Sicherung an und behält die neuesten. Zum Schutz vor einem Festplattenausfall einen Ordner auf einem anderen Laufwerk oder in einem Cloud-Ordner wählen.
+        Sorobo legt einmal täglich eine vollständige Sicherung an und behält die neuesten. Zum Schutz vor einem Festplattenausfall einen Ordner auf einem anderen Laufwerk oder in einem Cloud-Ordner wählen.
       </Text>
       <Stack gap="sm">
         <Switch label="Täglich automatisch sichern" checked={b.enabled} onChange={(e) => set({ enabled: e.currentTarget.checked })} />
@@ -1078,7 +1078,7 @@ function OverviewTab({ s, patch }: { s: Settings; patch: Patch }) {
   );
 }
 
-/** Public repository; shown as source code link in "Über Sqonto" once set. */
+/** Public repository; shown as source code link in "Über Sorobo" once set. */
 const SOURCE_URL = '';
 
 /** Appropriate legal notices (AGPL-3.0 § 5 d): copyright, no warranty, licence. */
@@ -1088,10 +1088,10 @@ function AboutTab() {
     <Stack gap="lg" maw={760}>
       <Card>
         <Group gap="md" mb="md">
-          <SqontoLogo size={48} />
+          <SoroboLogo size={48} />
           <div>
             <Text fw={700} size="lg">
-              Sqonto
+              Sorobo
             </Text>
             <Text size="sm" c="dimmed">
               Version {status?.version ?? '–'} · lokale Buchhaltungs- und Rechnungssoftware
@@ -1101,11 +1101,11 @@ function AboutTab() {
         <Stack gap="sm">
           <Text size="sm">Copyright © 2026 Johannes Asal</Text>
           <Text size="sm">
-            Sqonto ist freie Software: Sie können es unter den Bedingungen der GNU Affero General Public License, wie von der Free Software Foundation veröffentlicht, weitergeben und/oder
+            Sorobo ist freie Software: Sie können es unter den Bedingungen der GNU Affero General Public License, wie von der Free Software Foundation veröffentlicht, weitergeben und/oder
             verändern – entweder gemäß Version 3 der Lizenz oder (nach Ihrer Wahl) jeder späteren Version.
           </Text>
           <Text size="sm">
-            Sqonto wird in der Hoffnung bereitgestellt, dass es nützlich ist, aber <b>ohne jede Gewährleistung</b> – sogar ohne die implizite Gewährleistung der Marktreife oder der Eignung für
+            Sorobo wird in der Hoffnung bereitgestellt, dass es nützlich ist, aber <b>ohne jede Gewährleistung</b> – sogar ohne die implizite Gewährleistung der Marktreife oder der Eignung für
             einen bestimmten Zweck. Die Software unterstützt bei der Buchführung, ersetzt aber keine steuerliche Beratung.
           </Text>
           <Group gap="sm" mt="xs">
@@ -1125,7 +1125,7 @@ function AboutTab() {
           Komponenten Dritter
         </Text>
         <Text size="sm" c="dimmed">
-          Sqonto enthält Bibliotheken und Schriften anderer Projekte unter deren eigenen, freien Lizenzen (u. a. MIT, Apache-2.0, BSD und SIL Open Font License). Die vollständigen Lizenztexte
+          Sorobo enthält Bibliotheken und Schriften anderer Projekte unter deren eigenen, freien Lizenzen (u. a. MIT, Apache-2.0, BSD und SIL Open Font License). Die vollständigen Lizenztexte
           liegen in der Datei THIRD-PARTY-LICENSES.txt neben dem Programm.
         </Text>
       </Card>
@@ -1145,7 +1145,7 @@ const TABS = [
   { value: 'uebersicht', label: 'Übersicht', icon: IconHome2, saves: true },
   { value: 'daten', label: 'Daten & Sicherung', icon: IconDatabase, saves: true },
   { value: 'updates', label: 'Updates', icon: IconCloudDownload, saves: true },
-  { value: 'info', label: 'Über Sqonto', icon: IconInfoCircle, saves: false },
+  { value: 'info', label: 'Über Sorobo', icon: IconInfoCircle, saves: false },
 ];
 
 export function SettingsPage() {

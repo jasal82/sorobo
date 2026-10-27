@@ -138,8 +138,8 @@ pub async fn email_test(State(st): State<AppState>) -> ApiResult<super::MessageR
     let msg = crate::services::email::Outgoing {
         to: vec![to.clone()],
         cc: vec![],
-        subject: "Sqonto: Test-E-Mail".into(),
-        body: "Diese Nachricht bestätigt, dass Sqonto über Ihren E-Mail-Server senden kann.".into(),
+        subject: "Sorobo: Test-E-Mail".into(),
+        body: "Diese Nachricht bestätigt, dass Sorobo über Ihren E-Mail-Server senden kann.".into(),
         attachments: vec![],
     };
     tokio::task::spawn_blocking(move || crate::services::email::send(&s.email, &msg)).await.map_err(|e| AppError::from(anyhow::anyhow!(e)))??;
@@ -275,7 +275,7 @@ pub async fn rebuild(State(st): State<AppState>) -> ApiResult<super::MessageResp
 
 pub async fn backup(State(st): State<AppState>) -> Result<Response, AppError> {
     let zip = backup_zip(&st)?;
-    let name = format!("Sqonto-Datensicherung-{}.zip", chrono::Local::now().format("%Y-%m-%d_%H%M"));
+    let name = format!("Sorobo-Datensicherung-{}.zip", chrono::Local::now().format("%Y-%m-%d_%H%M"));
     Ok(file_response(zip, "application/zip", &name, true))
 }
 
@@ -295,7 +295,7 @@ fn write_backup<W: Write + std::io::Seek>(st: &AppState, out: W) -> Result<(), A
     let result = (|| -> anyhow::Result<()> {
         let mut zip = zip::ZipWriter::new(out);
         let opts: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-        zip.start_file("sqonto.db", opts)?;
+        zip.start_file("sorobo.db", opts)?;
         std::io::copy(&mut std::fs::File::open(&tmp)?, &mut zip)?;
         if let Ok(entries) = std::fs::read_dir(st.files_dir()) {
             for e in entries.flatten() {
@@ -312,15 +312,22 @@ fn write_backup<W: Write + std::io::Seek>(st: &AppState, out: W) -> Result<(), A
     result.map_err(AppError::from)
 }
 
-const AUTO_BACKUP_PREFIX: &str = "Sqonto-Sicherung-";
+const AUTO_BACKUP_PREFIX: &str = "Sorobo-Sicherung-";
+/// Automatic backups made before the rename (until version 0.10 as "Sqonto") are rotated along.
+const LEGACY_AUTO_BACKUP_PREFIX: &str = "Sqonto-Sicherung-";
 
 fn backup_folder(st: &AppState, s: &Settings) -> std::path::PathBuf {
     let folder = s.backup.folder.trim();
     if folder.is_empty() { st.data_dir.join("backups") } else { std::path::PathBuf::from(folder) }
 }
 
+/// Date of an automatic backup from its file name (`2026-01-03` or `2026-01-03_120000`).
+fn auto_backup_stamp(name: &str) -> Option<&str> {
+    name.strip_prefix(AUTO_BACKUP_PREFIX).or_else(|| name.strip_prefix(LEGACY_AUTO_BACKUP_PREFIX))?.strip_suffix(".zip")
+}
+
 fn is_auto_backup(name: &str) -> bool {
-    name.starts_with(AUTO_BACKUP_PREFIX) && name.ends_with(".zip")
+    auto_backup_stamp(name).is_some()
 }
 
 /// Daily automatic backup into the backup folder (`force`: right now, even if today's exists).
@@ -333,8 +340,13 @@ pub fn auto_backup(st: &AppState, force: bool) -> Result<Option<std::path::PathB
     let dir = backup_folder(st, &s);
     std::fs::create_dir_all(&dir).map_err(|e| AppError::bad(format!("Der Sicherungsordner {} ist nicht verfügbar: {e}", dir.display())))?;
     let now = chrono::Local::now();
-    let today = format!("{AUTO_BACKUP_PREFIX}{}", now.format("%Y-%m-%d"));
-    let exists = std::fs::read_dir(&dir).map_err(AppError::from)?.flatten().any(|e| e.file_name().to_string_lossy().starts_with(&today));
+    let date = now.format("%Y-%m-%d").to_string();
+    let today = format!("{AUTO_BACKUP_PREFIX}{date}");
+    let legacy_today = format!("{LEGACY_AUTO_BACKUP_PREFIX}{date}");
+    let exists = std::fs::read_dir(&dir).map_err(AppError::from)?.flatten().any(|e| {
+        let name = e.file_name().to_string_lossy().to_string();
+        name.starts_with(&today) || name.starts_with(&legacy_today)
+    });
     if exists && !force {
         return Ok(None);
     }
@@ -353,11 +365,12 @@ pub fn auto_backup(st: &AppState, force: bool) -> Result<Option<std::path::PathB
     Ok(Some(path))
 }
 
-/// Keeps the newest `keep` automatic backups (their names sort by date); other files stay.
+/// Keeps the newest `keep` automatic backups; other files stay.
 fn rotate_backups(dir: &std::path::Path, keep: usize) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     let mut names: Vec<String> = entries.flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| is_auto_backup(n)).collect();
-    names.sort();
+    // By date, not by name: the name's prefix changed with the rename.
+    names.sort_by(|a, b| auto_backup_stamp(a).cmp(&auto_backup_stamp(b)).then_with(|| a.cmp(b)));
     for n in names.iter().take(names.len().saturating_sub(keep)) {
         let _ = std::fs::remove_file(dir.join(n));
     }
@@ -421,7 +434,7 @@ fn validate_backup_db(path: &std::path::Path) -> anyhow::Result<()> {
     if let Some(v) = db::schema_version(&conn)
         && v > db::SCHEMA_VERSION
     {
-        anyhow::bail!("Sicherung einer neueren Sqonto-Version (Schema {v}) – bitte zuerst Sqonto aktualisieren");
+        anyhow::bail!("Sicherung einer neueren Sorobo-Version (Schema {v}) – bitte zuerst Sorobo aktualisieren");
     }
     Ok(())
 }
@@ -434,20 +447,20 @@ pub async fn restore(State(st): State<AppState>, mut mp: Multipart) -> ApiResult
         }
     }
     let bytes = bytes.ok_or_else(|| AppError::bad("Keine Datei übermittelt"))?;
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| AppError::bad("Die Datei ist keine gültige Sqonto-Datensicherung (ZIP)."))?;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| AppError::bad("Die Datei ist keine gültige Sorobo-Datensicherung (ZIP)."))?;
     let mut db_bytes = Vec::new();
-    // Backups from before the rename contain "kontor.db".
-    let db_index = archive
-        .index_for_name("sqonto.db")
-        .or_else(|| archive.index_for_name("kontor.db"))
-        .ok_or_else(|| AppError::bad("Die Sicherung enthält keine Datenbank (sqonto.db)."))?;
+    // Backups from before the renames contain "sqonto.db" (until version 0.10) or "kontor.db".
+    let db_index = ["sorobo.db", "sqonto.db", "kontor.db"]
+        .into_iter()
+        .find_map(|name| archive.index_for_name(name))
+        .ok_or_else(|| AppError::bad("Die Sicherung enthält keine Datenbank (sorobo.db)."))?;
     archive.by_index(db_index).map_err(AppError::from)?.read_to_end(&mut db_bytes).map_err(AppError::from)?;
     if !db_bytes.starts_with(b"SQLite format 3") {
         return Err(AppError::bad("Die Datenbank in der Sicherung ist beschädigt."));
     }
     // Database and files are staged next to the current data; nothing is replaced before both
     // are complete and the database has been checked.
-    let staged_db = st.data_dir.join("sqonto.db.restore");
+    let staged_db = st.data_dir.join("sorobo.db.restore");
     let staged_files = st.data_dir.join("files.restore");
     let cleanup = || {
         let _ = std::fs::remove_file(&staged_db);
@@ -462,7 +475,7 @@ pub async fn restore(State(st): State<AppState>, mut mp: Multipart) -> ApiResult
     let safety_dir = st.data_dir.join("backups");
     let stamp = chrono::Local::now().format("%Y-%m-%d_%H%M%S").to_string();
     let safety = (1..)
-        .map(|n| safety_dir.join(if n == 1 { format!("Sqonto-vor-Wiederherstellung-{stamp}.zip") } else { format!("Sqonto-vor-Wiederherstellung-{stamp}-{n}.zip") }))
+        .map(|n| safety_dir.join(if n == 1 { format!("Sorobo-vor-Wiederherstellung-{stamp}.zip") } else { format!("Sorobo-vor-Wiederherstellung-{stamp}-{n}.zip") }))
         .find(|p| !p.exists())
         .unwrap_or_default();
     let saved = std::fs::create_dir_all(&safety_dir).map_err(AppError::from).and_then(|_| backup_zip(&st)).and_then(|z| std::fs::write(&safety, z).map_err(AppError::from));
@@ -502,7 +515,7 @@ fn stage_restore(archive: &mut zip::ZipArchive<std::io::Cursor<Vec<u8>>>, db_byt
 
 /// Replaces database and files by the staged ones; on failure the previous state is put back.
 fn swap_in_restore(st: &AppState, staged_db: &std::path::Path, staged_files: &std::path::Path) -> anyhow::Result<()> {
-    let db_path = st.data_dir.join("sqonto.db");
+    let db_path = st.data_dir.join("sorobo.db");
     let files_dir = st.files_dir();
     let previous_files = st.data_dir.join("files.previous");
     let _ = std::fs::remove_dir_all(&previous_files);
@@ -520,7 +533,7 @@ fn swap_in_restore(st: &AppState, staged_db: &std::path::Path, staged_files: &st
     let mut guard = st.db();
     *guard = rusqlite::Connection::open_in_memory()?;
     for suffix in ["-wal", "-shm"] {
-        let _ = std::fs::remove_file(st.data_dir.join(format!("sqonto.db{suffix}")));
+        let _ = std::fs::remove_file(st.data_dir.join(format!("sorobo.db{suffix}")));
     }
     let opened = std::fs::rename(staged_db, &db_path).map_err(anyhow::Error::from).and_then(|_| db::open(&db_path));
     match opened {
@@ -690,12 +703,12 @@ mod tests {
 
     #[test]
     fn rotation_keeps_the_newest_automatic_backups() {
-        let dir = std::env::temp_dir().join(format!("sqonto-rotate-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("sorobo-rotate-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         for d in ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-03_120000", "2026-01-04"] {
             std::fs::write(dir.join(format!("{AUTO_BACKUP_PREFIX}{d}.zip")), b"x").unwrap();
         }
-        std::fs::write(dir.join("Sqonto-vor-Wiederherstellung-2025-12-01_100000.zip"), b"x").unwrap();
+        std::fs::write(dir.join("Sorobo-vor-Wiederherstellung-2025-12-01_100000.zip"), b"x").unwrap();
         std::fs::write(dir.join("notizen.txt"), b"x").unwrap();
         rotate_backups(&dir, 3);
         let mut left: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
@@ -704,12 +717,34 @@ mod tests {
         assert_eq!(
             left,
             vec![
-                "Sqonto-Sicherung-2026-01-03.zip",
-                "Sqonto-Sicherung-2026-01-03_120000.zip",
-                "Sqonto-Sicherung-2026-01-04.zip",
-                "Sqonto-vor-Wiederherstellung-2025-12-01_100000.zip",
+                "Sorobo-Sicherung-2026-01-03.zip",
+                "Sorobo-Sicherung-2026-01-03_120000.zip",
+                "Sorobo-Sicherung-2026-01-04.zip",
+                "Sorobo-vor-Wiederherstellung-2025-12-01_100000.zip",
                 "notizen.txt"
             ]
+        );
+    }
+
+    #[test]
+    fn rotation_orders_backups_from_before_the_rename_by_date() {
+        let dir = std::env::temp_dir().join(format!("sorobo-rotate-legacy-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // "Sqonto-…" sorts after "Sorobo-…" by name, so the date decides.
+        for d in ["2026-01-02", "2026-01-05"] {
+            std::fs::write(dir.join(format!("{LEGACY_AUTO_BACKUP_PREFIX}{d}.zip")), b"x").unwrap();
+        }
+        for d in ["2026-01-01", "2026-01-03", "2026-01-04"] {
+            std::fs::write(dir.join(format!("{AUTO_BACKUP_PREFIX}{d}.zip")), b"x").unwrap();
+        }
+        std::fs::write(dir.join("Sqonto-vor-Wiederherstellung-2025-12-01_100000.zip"), b"x").unwrap();
+        rotate_backups(&dir, 3);
+        let mut left: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        left.sort();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            left,
+            vec!["Sorobo-Sicherung-2026-01-03.zip", "Sorobo-Sicherung-2026-01-04.zip", "Sqonto-Sicherung-2026-01-05.zip", "Sqonto-vor-Wiederherstellung-2025-12-01_100000.zip"]
         );
     }
 
@@ -719,13 +754,13 @@ mod tests {
         assert_eq!(restore_file_name(&format!("files/{id}")), Some(id));
         for bad in [
             "files/",
-            "files/../sqonto.db",
+            "files/../sorobo.db",
             "files/..\\..\\evil.exe",
             "files/C:\\Windows\\evil.dll",
             "files/sub/0b9c3a52-6a3e-4a8e-9a4f-2f2b7c1d9e10",
             "files/CON",
             "files/0b9c3a526a3e4a8e9a4f2f2b7c1d9e10",
-            "sqonto.db",
+            "sorobo.db",
         ] {
             assert_eq!(restore_file_name(bad), None, "{bad}");
         }

@@ -35,7 +35,7 @@ export function useUpdateNotice(enabled: boolean): boolean {
       id: NOTICE_ID,
       color: 'brand',
       icon: <IconCloudDownload size={18} />,
-      title: `Sqonto ${latest} ist verfügbar`,
+      title: `Sorobo ${latest} ist verfügbar`,
       autoClose: false,
       message: (
         <>
