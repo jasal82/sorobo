@@ -29,17 +29,20 @@ import { notifications } from '@mantine/notifications';
 import { AreaChart, CompositeChart, DonutChart } from '@mantine/charts';
 import {
   IconAlertTriangle,
+  IconArrowBackUp,
   IconArrowRight,
   IconBellRinging,
   IconBuildingBank,
   IconCalculator,
   IconWorld,
   IconCash,
+  IconCashBanknote,
   IconChartLine,
   IconCheck,
   IconFileInvoice,
   IconFileText,
   IconPencil,
+  IconPercentage,
   IconReceipt2,
   IconWallet,
   IconCoins,
@@ -59,8 +62,12 @@ const TODO_ICONS: Record<string, React.ReactNode> = {
   overdue: <IconAlertTriangle size={18} />,
   dunning: <IconBellRinging size={18} />,
   transactions: <IconBuildingBank size={18} />,
+  debit_returned: <IconArrowBackUp size={18} />,
+  debits: <IconCashBanknote size={18} />,
   drafts: <IconPencil size={18} />,
+  base_rate: <IconPercentage size={18} />,
   ustva: <IconCalculator size={18} />,
+  ustva_changed: <IconCalculator size={18} />,
   zm: <IconWorld size={18} />,
   zm_changed: <IconWorld size={18} />,
 };
@@ -77,7 +84,7 @@ function TodoCard({ todo }: { todo: Todo }) {
       <Paper withBorder p="sm" radius="md" style={{ borderLeft: `3px solid var(--mantine-color-${todo.severity}-6)` }}>
         <Group gap="sm" wrap="nowrap">
           <ThemeIcon variant="light" color={todo.severity} radius="md" size={34}>
-            {TODO_ICONS[todo.kind]}
+            {TODO_ICONS[todo.kind] ?? <IconAlertTriangle size={18} />}
           </ThemeIcon>
           <Box style={{ flex: 1 }}>
             <Text size="sm" fw={600}>
