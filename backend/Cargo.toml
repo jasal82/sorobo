@@ -4,7 +4,7 @@
 
 [package]
 name = "sorobo"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 description = "Sorobo – lokale Buchhaltungs- und Rechnungssoftware"
 license = "AGPL-3.0-or-later"
