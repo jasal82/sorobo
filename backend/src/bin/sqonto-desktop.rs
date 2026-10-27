@@ -23,6 +23,8 @@ use std::sync::Mutex;
 use sqonto::Launch;
 use serde::{Deserialize, Serialize};
 use tao::dpi::{LogicalSize, PhysicalPosition};
+#[cfg(target_os = "macos")]
+use tao::event::StartCause;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget};
 use tao::window::{Icon, ResizeDirection, Window, WindowBuilder, WindowId};
@@ -90,6 +92,8 @@ fn main() {
 
 fn run(dir: &Path, app_url: String, start_url: String) -> ! {
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    #[cfg(target_os = "macos")]
+    set_dock_icon();
     let proxy = event_loop.create_proxy();
     #[cfg(target_os = "macos")]
     let _menu = macos_menu(proxy.clone());
@@ -148,6 +152,9 @@ fn run(dir: &Path, app_url: String, start_url: String) -> ! {
     event_loop.run(move |event, target, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
+            // Once the app has finished launching: macOS may reset the icon set before that.
+            #[cfg(target_os = "macos")]
+            Event::NewEvents(StartCause::Init) => set_dock_icon(),
             Event::WindowEvent { window_id, event: WindowEvent::CloseRequested, .. } => {
                 if window_id != window.id() {
                     popups.remove(&window_id);
@@ -275,6 +282,20 @@ fn macos_menu(proxy: EventLoopProxy<UserEvent>) -> muda::Menu {
     window.set_as_windows_menu_for_nsapp();
     menu.init_for_nsapp();
     menu
+}
+
+/// The executable has no bundle, so macOS would show a generic icon in the Dock.
+#[cfg(target_os = "macos")]
+fn set_dock_icon() {
+    use objc2::{AllocAnyThread, MainThreadMarker};
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::NSData;
+    let Some(mtm) = MainThreadMarker::new() else { return };
+    let data = NSData::with_bytes(include_bytes!("../../assets/icons/sqonto-macos-512.png"));
+    if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+        // SAFETY: called on the main thread with a valid image.
+        unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image)) };
+    }
 }
 
 fn main_window(event_loop: &EventLoop<UserEvent>, state_file: &Path) -> Result<Window, tao::error::OsError> {

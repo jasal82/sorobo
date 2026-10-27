@@ -75,6 +75,10 @@ rfd = { version = "0.17", optional = true }
 # Application menu (macOS): without an Edit menu, Cmd+C/V/X/A/Z do nothing in the WebView.
 [target.'cfg(target_os = "macos")'.dependencies]
 muda = "0.17"
+# Dock icon; the versions wry and tao already use.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData"] }
 
 [dev-dependencies]
 tower = { version = "0.5.3", features = ["util"] }
