@@ -434,35 +434,7 @@ pub fn load(conn: &Connection) -> Result<()> {
     mk_receipt(conn, &suppliers[5], today() - Duration::days(5), "KP-JA-2026", "standard", vec![rl(num("4957", "6827"), "Vorbereitung Jahresabschluss", dec!(892.50), 19)], None)?;
     mk_receipt(conn, &suppliers[3], today() - Duration::days(20), "BN-91002", "standard", vec![rl(num("4930", "6815"), "Druckerpatronen", dec!(189.90), 19)], None)?;
 
-    // ---------------------------------------------------------------- Bank: Steuern, Privat, offene Umsätze
-    let quarters_done = (last_month - 1) / 3;
-    for q in 1..=quarters_done {
-        let period = format!("Q{q}");
-        let rep = crate::services::reports::ustva(conn, year, &period)?;
-        if small_business || rep.zahllast.is_zero() {
-            continue;
-        }
-        let due = rep.due_date;
-        if due > today() {
-            continue;
-        }
-        finance::create(
-            conn,
-            TransactionInput {
-                tx: Transaction { account_id: bank_id, date: due, amount: -rep.zahllast, counterparty: "Finanzamt Hamburg-Mitte".into(), purpose: format!("USt-VA {period}/{year} StNr 27/123/45678"), source: "manual".into(), ..Default::default() },
-                allocations: vec![Allocation { kind: "account".into(), account: acc("ust_vz"), amount: -rep.zahllast, description: format!("Umsatzsteuer-Vorauszahlung {period}/{year}"), ..Default::default() }],
-            },
-        )?;
-        let mut f = UstvaFiling { id: 0, year: year as i64, period, submitted_at: (due - Duration::days(3)).to_string(), amount: rep.zahllast, note: "Über ELSTER übermittelt".into() };
-        db::insert(conn, &mut f)?;
-    }
-    for q in 1..=quarters_done {
-        let period = format!("Q{q}");
-        let rep = crate::services::zm::report(conn, year, &period)?;
-        if !small_business && !rep.rows.is_empty() && rep.due_date <= today() {
-            crate::services::zm::file(conn, year, &period, rep.due_date - Duration::days(5), "Über ELSTER übermittelt".into())?;
-        }
-    }
+    // ---------------------------------------------------------------- Bank: Gebühren, offene Umsätze
     for month in [1u32, 4, 7, 10] {
         let d = ymd(year, month, 28);
         if d > today() {
@@ -530,6 +502,38 @@ pub fn load(conn: &Connection) -> Result<()> {
                 conn,
                 CashEntryInput { account_id: cash, date: Some(d), direction: dir.into(), amount, description: text.into(), counter_account: account, tax_rate: Decimal::from(rate), ..Default::default() },
             )?;
+        }
+    }
+
+    // ---------------------------------------------------------------- Steuern: Vorauszahlungen und Meldungen
+    // Last, once every booking of the quarters exists (the cash book carries VAT as well): the filed
+    // amounts then match the returns, and the demo does not start with "changed after filing".
+    let quarters_done = (last_month - 1) / 3;
+    for q in 1..=quarters_done {
+        let period = format!("Q{q}");
+        let rep = crate::services::reports::ustva(conn, year, &period)?;
+        if small_business || rep.zahllast.is_zero() {
+            continue;
+        }
+        let due = rep.due_date;
+        if due > today() {
+            continue;
+        }
+        finance::create(
+            conn,
+            TransactionInput {
+                tx: Transaction { account_id: bank_id, date: due, amount: -rep.zahllast, counterparty: "Finanzamt Hamburg-Mitte".into(), purpose: format!("USt-VA {period}/{year} StNr 27/123/45678"), source: "manual".into(), ..Default::default() },
+                allocations: vec![Allocation { kind: "account".into(), account: acc("ust_vz"), amount: -rep.zahllast, description: format!("Umsatzsteuer-Vorauszahlung {period}/{year}"), ..Default::default() }],
+            },
+        )?;
+        let mut f = UstvaFiling { id: 0, year: year as i64, period, submitted_at: (due - Duration::days(3)).to_string(), amount: rep.zahllast, note: "Über ELSTER übermittelt".into() };
+        db::insert(conn, &mut f)?;
+    }
+    for q in 1..=quarters_done {
+        let period = format!("Q{q}");
+        let rep = crate::services::zm::report(conn, year, &period)?;
+        if !small_business && !rep.rows.is_empty() && rep.due_date <= today() {
+            crate::services::zm::file(conn, year, &period, rep.due_date - Duration::days(5), "Über ELSTER übermittelt".into())?;
         }
     }
     renumber_chronologically(conn)?;
@@ -606,5 +610,22 @@ mod tests {
         finance::save_account(&conn, PaymentAccount { name: "Bank".into(), kind: "bank".into(), ..Default::default() }).unwrap();
         load(&conn).unwrap();
         assert!(db::scalar_i64(&conn, "SELECT COUNT(*) FROM documents WHERE status != 'draft'", &[]).unwrap() > 0);
+    }
+
+    #[test]
+    fn filed_returns_match_the_loaded_data() {
+        let conn = db::open_memory();
+        cfg::ensure_seeded(&conn).unwrap();
+        // As the onboarding creates them: the cash book entries carry VAT as well.
+        finance::save_account(&conn, PaymentAccount { name: "Bank".into(), kind: "bank".into(), ..Default::default() }).unwrap();
+        finance::save_account(&conn, PaymentAccount { name: "Kasse".into(), kind: "cash".into(), ..Default::default() }).unwrap();
+        load(&conn).unwrap();
+        for p in crate::services::reports::ustva_periods(&conn, today().year()).unwrap() {
+            if let Some(f) = p.filing {
+                assert_eq!(f.amount, p.zahllast, "UStVA {}", p.period);
+            }
+        }
+        let todos: Vec<String> = crate::services::reports::dashboard(&conn).unwrap().todos.into_iter().map(|t| t.kind).collect();
+        assert!(!todos.iter().any(|k| k.ends_with("_changed")), "{todos:?}");
     }
 }
