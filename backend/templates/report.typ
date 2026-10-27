@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // See LICENSE in the project root for the full license and warranty disclaimer.
 
-// Sqonto – generic report template (EÜR, GuV, Bilanz, UStVA, Kassenbuch, Journal …)
+// Sorobo – generic report template (EÜR, GuV, Bilanz, UStVA, Kassenbuch, Journal …)
 
 #let data = json("data.json")
 #let accent = rgb("#1d4ed8")

@@ -6,7 +6,7 @@
 
 export type EmailSettings = { 
 /**
- * Send documents from Sqonto (otherwise the mail program is opened).
+ * Send documents from Sorobo (otherwise the mail program is opened).
  */
 enabled: boolean, host: string, port: number, 
 /**

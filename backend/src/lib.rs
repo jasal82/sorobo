@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // See LICENSE in the project root for the full license and warranty disclaimer.
 
-//! Sqonto – lokale Buchhaltungs- und Rechnungssoftware.
+//! Sorobo – lokale Buchhaltungs- und Rechnungssoftware.
 //!
 //! The library contains the complete application: database, bookkeeping, PDF output and the
 //! HTTP API including the embedded frontend. It is used by two programs:
 //!
-//! * `sqonto-server` – headless server for the browser or the Vite dev server,
-//! * `sqonto-desktop` – native window (WebView2 / WebKit) around the same server.
+//! * `sorobo-server` – headless server for the browser or the Vite dev server,
+//! * `sorobo-desktop` – native window (WebView2 / WebKit) around the same server.
 
 mod api;
 mod chart;
@@ -32,11 +32,17 @@ use tower_http::compression::CompressionLayer;
 
 use crate::state::{AppState, Inner};
 
-/// Data directory: `SQONTO_DATA_DIR`, otherwise next to the executable for release builds
+/// Environment variable `SOROBO_<name>`. Until version 0.10 the program was called "Sqonto";
+/// `SQONTO_<name>` is still read, so existing scripts and shortcuts keep working.
+pub fn env_var(name: &str) -> Option<String> {
+    std::env::var(format!("SOROBO_{name}")).or_else(|_| std::env::var(format!("SQONTO_{name}"))).ok()
+}
+
+/// Data directory: `SOROBO_DATA_DIR`, otherwise next to the executable for release builds
 /// (portable installation, independent of where it is started from) and the working directory
 /// for debug builds.
 pub fn data_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("SQONTO_DATA_DIR") {
+    if let Some(dir) = env_var("DATA_DIR") {
         return PathBuf::from(dir);
     }
     if !cfg!(debug_assertions)
@@ -48,9 +54,9 @@ pub fn data_dir() -> PathBuf {
     cwd.join("data")
 }
 
-/// Preferred port: `SQONTO_PORT` or 8787.
+/// Preferred port: `SOROBO_PORT` or 8787.
 pub fn default_port() -> u16 {
-    std::env::var("SQONTO_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8787)
+    env_var("PORT").and_then(|p| p.parse().ok()).unwrap_or(8787)
 }
 
 /// A bound, fully initialised server that only needs to be run.
@@ -71,16 +77,17 @@ impl Server {
 
 pub enum Launch {
     Started(Server),
-    /// Sqonto already runs with the same data (e.g. after a second double-click).
+    /// Sorobo already runs with the same data (e.g. after a second double-click).
     AlreadyRunning { port: u16, url: String },
 }
 
 /// Binds the local port and initialises database, fonts and API. A port taken by anything
-/// other than a Sqonto instance with the same data is skipped.
+/// other than a Sorobo instance with the same data is skipped.
 pub async fn launch(port: u16, dir: &Path) -> anyhow::Result<Launch> {
     std::fs::create_dir_all(dir.join("files"))?;
     // Started by an update: the previous process is still shutting down and keeps its port a moment.
-    let restarting = std::env::var_os(services::update::RESTART_ENV).is_some();
+    // A version from before the rename sets `SQONTO_RESTARTING`.
+    let restarting = env_var("RESTARTING").is_some();
     let mut bound = None;
     for p in port..port.saturating_add(20) {
         match bind(p, restarting && p == port).await {
@@ -101,7 +108,7 @@ pub async fn launch(port: u16, dir: &Path) -> anyhow::Result<Launch> {
         anyhow::bail!("Kein freier Port zwischen {port} und {} gefunden.", port.saturating_add(19));
     };
     migrate_legacy_files(dir)?;
-    let conn = db::open(&dir.join("sqonto.db"))?;
+    let conn = db::open(&dir.join("sorobo.db"))?;
     services::settings::ensure_seeded(&conn)?;
     services::posting::ensure_current_afa(&conn)?;
     tracing::info!("Lade Schriftarten …");
@@ -187,19 +194,28 @@ fn spawn_maintenance(state: AppState) {
     });
 }
 
-/// The program was called "Kontor" before; its database is taken over unchanged.
+/// Earlier names of the program, newest first: "Sqonto" until version 0.10, "Kontor" before.
+const LEGACY_NAMES: [&str; 2] = ["sqonto", "kontor"];
+
+/// Takes over the database of an earlier name unchanged (together with its WAL files, which
+/// SQLite finds by the database's name) and removes the old log.
 fn migrate_legacy_files(dir: &Path) -> anyhow::Result<()> {
-    if dir.join("sqonto.db").exists() || !dir.join("kontor.db").exists() {
+    if dir.join("sorobo.db").exists() {
         return Ok(());
     }
+    let Some(old) = LEGACY_NAMES.into_iter().find(|n| dir.join(format!("{n}.db")).exists()) else {
+        return Ok(());
+    };
     for suffix in ["", "-wal", "-shm"] {
-        let old = dir.join(format!("kontor.db{suffix}"));
-        if old.exists() {
-            std::fs::rename(&old, dir.join(format!("sqonto.db{suffix}")))?;
+        let from = dir.join(format!("{old}.db{suffix}"));
+        if from.exists() {
+            std::fs::rename(&from, dir.join(format!("sorobo.db{suffix}")))?;
         }
     }
-    let _ = std::fs::remove_file(dir.join("kontor.log"));
-    tracing::info!("Datenbank kontor.db als sqonto.db übernommen");
+    for name in LEGACY_NAMES {
+        let _ = std::fs::remove_file(dir.join(format!("{name}.log")));
+    }
+    tracing::info!("Datenbank {old}.db als sorobo.db übernommen");
     Ok(())
 }
 
@@ -215,7 +231,7 @@ fn local_request(port: u16, method: &str, path: &str) -> Option<serde_json::Valu
     serde_json::from_str(response.split_once("\r\n\r\n")?.1).ok()
 }
 
-/// Data directory of a Sqonto instance listening on `port`, if there is one.
+/// Data directory of a Sorobo instance listening on `port`, if there is one.
 fn running_instance(port: u16) -> Option<String> {
     local_request(port, "GET", "/api/system/status")?.get("data_dir")?.as_str().map(str::to_string)
 }
@@ -258,4 +274,57 @@ pub(crate) fn focus_window() -> bool {
 /// Asks the instance on `port` to raise its window; false if it has none (headless server).
 pub fn request_focus(port: u16) -> bool {
     local_request(port, "POST", "/api/system/focus").and_then(|v| v.get("focused")?.as_bool()).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("sorobo-legacy-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn names(dir: &Path) -> Vec<String> {
+        let mut n: Vec<String> = std::fs::read_dir(dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        n.sort();
+        n
+    }
+
+    #[test]
+    fn database_of_an_earlier_name_is_taken_over() {
+        let dir = temp_dir();
+        for (file, body) in [("sqonto.db", "db"), ("sqonto.db-wal", "wal"), ("sqonto.db-shm", "shm"), ("sqonto.log", "log"), ("kontor.db", "älter")] {
+            std::fs::write(dir.join(file), body).unwrap();
+        }
+        migrate_legacy_files(&dir).unwrap();
+        // The newest earlier name wins; the older database is left alone.
+        assert_eq!(names(&dir), ["kontor.db", "sorobo.db", "sorobo.db-shm", "sorobo.db-wal"]);
+        assert_eq!(std::fs::read_to_string(dir.join("sorobo.db")).unwrap(), "db");
+        assert_eq!(std::fs::read_to_string(dir.join("sorobo.db-wal")).unwrap(), "wal");
+        // Runs again on every start: an existing sorobo.db is never touched.
+        std::fs::write(dir.join("sqonto.db"), "neu angelegt").unwrap();
+        migrate_legacy_files(&dir).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join("sorobo.db")).unwrap(), "db");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn database_from_kontor_is_still_taken_over() {
+        let dir = temp_dir();
+        std::fs::write(dir.join("kontor.db"), "db").unwrap();
+        std::fs::write(dir.join("kontor.log"), "log").unwrap();
+        migrate_legacy_files(&dir).unwrap();
+        assert_eq!(names(&dir), ["sorobo.db"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn nothing_happens_without_an_earlier_database() {
+        let dir = temp_dir();
+        migrate_legacy_files(&dir).unwrap();
+        assert!(names(&dir).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -253,7 +253,7 @@ function EinvoiceMenu({ doc }: { doc: DocumentFull }) {
   );
 }
 
-/** Sends a document from Sqonto (SMTP settings under Einstellungen → E-Mail). */
+/** Sends a document from Sorobo (SMTP settings under Einstellungen → E-Mail). */
 function SendEmailModal({ opened, onClose, doc }: { opened: boolean; onClose: () => void; doc: DocumentFull }) {
   const [mail, setMail] = useState<EmailRequest>({ to: '', cc: '', subject: '', body: '' });
   const [attachments, setAttachments] = useState<string[]>([]);

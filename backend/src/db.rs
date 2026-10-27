@@ -24,7 +24,7 @@ const SCHEMA: &str = include_str!("schema.sql");
 /// `n + 1`. Tables and columns are not migrated here – `complete_tables` adds everything of
 /// `schema.sql` an older database lacks, whatever state it is in. An entry is only needed to change
 /// existing data (fill a new column, convert values); it runs after the tables are complete.
-/// New columns still count the version up, so that an older Sqonto refuses the database instead
+/// New columns still count the version up, so that an older Sorobo refuses the database instead
 /// of writing rows without them.
 const MIGRATIONS: &[&str] = &[
     // 1 → 2: Abo-Rechnungen finalize and send automatically, price changes (columns only)
@@ -51,7 +51,7 @@ pub fn open(path: &Path) -> Result<Connection> {
 /// it (the automatic backups never delete it).
 fn backup_before_upgrade(conn: &Connection, path: &Path, from: i64) -> Result<()> {
     let dir = path.parent().unwrap_or_else(|| Path::new(".")).join("backups");
-    let target = dir.join(format!("Sqonto-vor-Update-Schema{from}-{SCHEMA_VERSION}_{}.db", chrono::Local::now().format("%Y-%m-%d_%H%M%S")));
+    let target = dir.join(format!("Sorobo-vor-Update-Schema{from}-{SCHEMA_VERSION}_{}.db", chrono::Local::now().format("%Y-%m-%d_%H%M%S")));
     std::fs::create_dir_all(&dir)
         .map_err(anyhow::Error::from)
         .and_then(|_| conn.backup(rusqlite::MAIN_DB, &target, None::<fn(rusqlite::backup::Progress)>).map_err(anyhow::Error::from))
@@ -152,7 +152,7 @@ fn migrate_with(conn: &Connection, schema: &str, migrations: &[&str]) -> Result<
     };
     if version > latest {
         anyhow::bail!(
-            "Die Datenbank stammt aus einer neueren Sqonto-Version (Schema {version}, unterstützt bis {latest}). Bitte Sqonto aktualisieren."
+            "Die Datenbank stammt aus einer neueren Sorobo-Version (Schema {version}, unterstützt bis {latest}). Bitte Sorobo aktualisieren."
         );
     }
     let added = complete_tables(&tx, schema).context("Datenbank-Update fehlgeschlagen")?;
@@ -546,7 +546,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         migrate_with(&conn, NEW, STEPS).unwrap();
         let err = migrate_with(&conn, OLD, &[]).unwrap_err().to_string();
-        assert!(err.contains("neueren Sqonto-Version"), "{err}");
+        assert!(err.contains("neueren Sorobo-Version"), "{err}");
     }
 
     #[test]
@@ -618,10 +618,10 @@ mod tests {
 
     #[test]
     fn a_backup_is_made_before_an_upgrade() {
-        let dir = std::env::temp_dir().join(format!("sqonto-db-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sorobo-db-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("sqonto.db");
+        let path = dir.join("sorobo.db");
         {
             let conn = Connection::open(&path).unwrap();
             conn.execute_batch(RELEASED[0].2).unwrap();
@@ -631,7 +631,7 @@ mod tests {
         assert_eq!(schema_version(&conn), Some(SCHEMA_VERSION));
         let backups: Vec<String> = std::fs::read_dir(dir.join("backups")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
         assert_eq!(backups.len(), 1, "{backups:?}");
-        assert!(backups[0].starts_with(&format!("Sqonto-vor-Update-Schema1-{SCHEMA_VERSION}_")));
+        assert!(backups[0].starts_with(&format!("Sorobo-vor-Update-Schema1-{SCHEMA_VERSION}_")));
         let old = Connection::open(dir.join("backups").join(&backups[0])).unwrap();
         assert_eq!(schema_version(&old), Some(1), "the backup is the unchanged database");
         drop((conn, old));

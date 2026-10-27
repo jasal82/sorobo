@@ -18,11 +18,11 @@ notes: string, release_url: string, checked_at: string | null,
  */
 check_error: string, 
 /**
- * Sqonto can install the update itself; otherwise it is downloaded from `release_url`.
+ * Sorobo can install the update itself; otherwise it is downloaded from `release_url`.
  */
 can_install: boolean, 
 /**
- * How the update is installed, or why Sqonto cannot do it itself.
+ * How the update is installed, or why Sorobo cannot do it itself.
  */
 install_note: string, download_size: number, 
 /**

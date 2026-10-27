@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // See LICENSE in the project root for the full license and warranty disclaimer.
 
-// Thin typed HTTP client for the Sqonto backend.
+// Thin typed HTTP client for the Sorobo backend.
 
 export class ApiError extends Error {
   status: number;

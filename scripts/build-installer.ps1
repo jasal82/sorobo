@@ -22,9 +22,9 @@ try {
     if (!(Test-Path -LiteralPath $Iscc)) {
         throw 'Install Inno Setup 6 (https://jrsoftware.org/isdl.php), add ISCC.exe to PATH or set ISCC to its full path. For portable binaries only, use build.cmd --no-installer.'
     }
-    foreach ($file in 'Sqonto.exe', 'sqonto-server.exe', 'LICENSE.txt', 'THIRD-PARTY-LICENSES.txt') {
+    foreach ($file in 'Sorobo.exe', 'sorobo-server.exe', 'LICENSE.txt', 'THIRD-PARTY-LICENSES.txt') {
         if (!(Test-Path -LiteralPath "dist/$file")) { throw "Missing dist/$file. Run build.cmd first." }
     }
-    & $Iscc "/DAppVersion=$version" 'installer/sqonto.iss'
+    & $Iscc "/DAppVersion=$version" 'installer/sorobo.iss'
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 } finally { Pop-Location }

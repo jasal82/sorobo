@@ -6,16 +6,16 @@
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=assets/icons/sqonto.ico");
+    println!("cargo:rerun-if-changed=assets/icons/sorobo.ico");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
     }
     let mut res = winresource::WindowsResource::new();
     // Resource id 1 – the desktop window loads its icon from here.
-    res.set_icon_with_id("assets/icons/sqonto.ico", "1");
-    res.set("ProductName", "Sqonto");
-    res.set("FileDescription", "Sqonto – Buchhaltung");
-    res.set("CompanyName", "Sqonto");
+    res.set_icon_with_id("assets/icons/sorobo.ico", "1");
+    res.set("ProductName", "Sorobo");
+    res.set("FileDescription", "Sorobo – Buchhaltung");
+    res.set("CompanyName", "Sorobo");
     res.set("LegalCopyright", "Copyright (C) 2026 Johannes Asal");
     if let Err(e) = res.compile() {
         // A missing resource compiler only costs the icon, not the build.

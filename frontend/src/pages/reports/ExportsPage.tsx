@@ -36,8 +36,8 @@ function useStoredState(key: string) {
 export function ExportsPage() {
   const navigate = useNavigate();
   const [range, setRange] = useState<[string | null, string | null]>([dayjs().startOf('year').format('YYYY-MM-DD'), dayjs().endOf('year').format('YYYY-MM-DD')]);
-  const [advisor, setAdvisor] = useStoredState('sqonto.datev.advisor');
-  const [client, setClient] = useStoredState('sqonto.datev.client');
+  const [advisor, setAdvisor] = useStoredState('sorobo.datev.advisor');
+  const [client, setClient] = useStoredState('sorobo.datev.client');
   const [year, setYear] = useState(new Date().getFullYear());
   const [auditYear, setAuditYear] = useState(new Date().getFullYear() - 1);
   const [busy, setBusy] = useState<string | null>(null);

@@ -384,12 +384,12 @@ pub fn create(conn: &Connection, req: PaymentRunRequest) -> Result<PaymentRunVie
         created_at: now_str(),
     };
     let id = db::insert(conn, &mut run)?;
-    run.message_id = sepa_id(&format!("SQONTO-{}-{id}", now.format("%Y%m%d%H%M%S")));
+    run.message_id = sepa_id(&format!("SOROBO-{}-{id}", now.format("%Y%m%d%H%M%S")));
     db::update(conn, &run)?;
     let mut with_payee = Vec::new();
     for (mut item, p, r) in items {
         item.run_id = id;
-        item.end_to_end_id = sepa_id(&format!("SQ{id}-{}", r.number));
+        item.end_to_end_id = sepa_id(&format!("SO{id}-{}", r.number));
         db::insert(conn, &mut item)?;
         cfg::log(conn, "receipt", r.id, "transfer", format!("Überweisung über {} zur Ausführung am {} erstellt", fmt_money(item.amount), fmt_date(req.execution_date)))?;
         with_payee.push((item, p));
@@ -476,7 +476,7 @@ mod tests {
         assert!(iban_valid("CH9300762011623852957"));
         assert!(bic_valid("COBADEFF") && bic_valid("COBADEFFXXX") && !bic_valid("COBA1EFF"));
         assert_eq!(sepa_text("Müller & Söhne GmbH; Straße_3 – 5€ (19%)", 140), "Mueller + Soehne GmbH- Strasse-3 - 5 EUR (19 Prozent )");
-        assert_eq!(sepa_id("SQ1-ER 2026/0001 ä"), "SQ1-ER2026/0001ae");
+        assert_eq!(sepa_id("SO1-ER 2026/0001 ä"), "SO1-ER2026/0001ae");
         assert_eq!(sepa_text(&"x".repeat(200), 140).len(), 140);
     }
 

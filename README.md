@@ -1,9 +1,9 @@
-# Sqonto – Buchhaltung
+# Sorobo – Buchhaltung
 
 Lokale Buchhaltungssoftware für Selbstständige, Freiberufler und kleine Unternehmen. Läuft
 vollständig auf dem eigenen Rechner (keine Cloud), die Daten liegen in einer SQLite-Datenbank.
 
-Projektwebsite: [sqonto.de](https://sqonto.de).
+Projektwebsite: [sorobo.de](https://sorobo.de).
 
 ## Funktionen
 
@@ -35,7 +35,7 @@ Projektwebsite: [sqonto.de](https://sqonto.de).
 ## Schnellstart (Windows)
 
 Fertige Windows-Installer und portable Archive stehen nach einem Release unter **Releases**
-im GitHub-Repository bereit. Der Installer installiert Sqonto für den aktuellen Benutzer
+im GitHub-Repository bereit. Der Installer installiert Sorobo für den aktuellen Benutzer
 (ohne Administratorrechte) und legt einen Eintrag im Startmenü sowie optional auf dem Desktop an.
 
 Zum eigenen Bauen: [Rust](https://rustup.rs) (stable, unter Windows x64 MSVC),
@@ -49,14 +49,14 @@ build.cmd
 
 baut Frontend und Backend und legt die fertigen Programme unter `dist\` ab:
 
-- **`Sqonto.exe`** – die Desktop-Anwendung. Ein Doppelklick (oder `start.cmd`) öffnet Sqonto in
+- **`Sorobo.exe`** – die Desktop-Anwendung. Ein Doppelklick (oder `start.cmd`) öffnet Sorobo in
   einem eigenen Fenster – ohne Konsole und ohne Browser. Ein erneuter Start holt das bereits
   geöffnete Fenster in den Vordergrund. PDFs zum Drucken öffnen sich in einem eigenen Fenster,
   Downloads fragen mit dem Dialog „Speichern unter“ nach dem Ziel. Beim Schließen mit
-  ungespeicherten Änderungen fragt Sqonto nach.
-- **`sqonto-server.exe`** – derselbe Server ohne Fenster, z. B. für die Nutzung im Browser
+  ungespeicherten Änderungen fragt Sorobo nach.
+- **`sorobo-server.exe`** – derselbe Server ohne Fenster, z. B. für die Nutzung im Browser
   (<http://localhost:8787>) oder für die Entwicklung.
-- **`packages\Sqonto-<Version>-windows-x64-setup.exe`** – Windows-Installer mit beiden
+- **`packages\Sorobo-<Version>-windows-x64-setup.exe`** – Windows-Installer mit beiden
   Programmen und Lizenztexten. `build.cmd --no-installer` baut nur die portablen Programme.
   Nach einem bereits fertigen Build kann mit
   `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-installer.ps1`
@@ -66,15 +66,15 @@ Die Daten liegen im Ordner `dist\data` neben den Programmen (beide nutzen diesel
 Umziehen oder Sichern genügt es, diesen Ordner zu kopieren – oder unter
 *Einstellungen → Daten & Sicherung* eine Sicherung herunterzuladen.
 
-Bei Installation ist der Standardpfad `%LOCALAPPDATA%\Programs\Sqonto`, die Daten liegen
-entsprechend in `%LOCALAPPDATA%\Programs\Sqonto\data`. Updates über denselben Installer
+Bei Installation ist der Standardpfad `%LOCALAPPDATA%\Programs\Sorobo`, die Daten liegen
+entsprechend in `%LOCALAPPDATA%\Programs\Sorobo\data`. Updates über denselben Installer
 ersetzen nur die Programmdateien. Auch eine Deinstallation lässt die Daten bestehen.
-Beim Wechsel von einer portablen Version Sqonto schließen und den bisherigen `data`-Ordner
+Beim Wechsel von einer portablen Version Sorobo schließen und den bisherigen `data`-Ordner
 in den Installationsordner kopieren, bevor die installierte Anwendung gestartet wird.
 
-Sqonto fragt beim Start und danach täglich bei GitHub nach einer neuen Version und meldet
+Sorobo fragt beim Start und danach täglich bei GitHub nach einer neuen Version und meldet
 sich, wenn es eine gibt (abschaltbar unter *Einstellungen → Updates*; Buchhaltungsdaten werden
-dabei nicht übertragen). Dort lässt sich das Update auch direkt installieren: Sqonto legt vorher
+dabei nicht übertragen). Dort lässt sich das Update auch direkt installieren: Sorobo legt vorher
 eine Sicherung an, lädt das Paket für das eigene System, prüft dessen SHA-256-Prüfsumme und
 startet danach neu – eine Installation über den neuen Installer, portable Programme und
 `.tar.gz`-Archive durch Austausch der Programmdateien.
@@ -82,9 +82,9 @@ startet danach neu – eine Installation über den neuen Installer, portable Pro
 Die Desktop-Anwendung benötigt die „Microsoft Edge WebView2 Runtime“, die auf vielen
 Windows-Systemen bereits vorhanden ist. Falls sie fehlt, die
 [Evergreen Runtime von Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)
-installieren; sie ist nicht im Sqonto-Installer enthalten. Unter Linux/macOS entsprechend
+installieren; sie ist nicht im Sorobo-Installer enthalten. Unter Linux/macOS entsprechend
 `sh build.sh`; Linux benötigt dafür `webkit2gtk-4.1` und GTK 3 (zum Bauen die jeweiligen
-Entwicklungspakete). Mit `SQONTO_SERVER_ONLY=1 sh build.sh` wird nur der Server gebaut.
+Entwicklungspakete). Mit `SOROBO_SERVER_ONLY=1 sh build.sh` wird nur der Server gebaut.
 Das Skript erzeugt zusätzlich ein portables `.tar.gz` unter `dist/packages/`. Linux-Archive
 benötigen auch auf dem Zielsystem WebKitGTK 4.1/GTK 3; macOS-Archive enthalten native Programme,
 kein `.app`-Bundle. Die Pakete sind derzeit weder signiert noch unter macOS notarisiert.
@@ -92,16 +92,30 @@ kein `.app`-Bundle. Die Pakete sind derzeit weder signiert noch unter macOS nota
 Beim ersten Start führt ein Assistent durch die Einrichtung. Mit *„Erst einmal ausprobieren“*
 wird ein vollständiges Demo-Geschäftsjahr geladen.
 
+### Umstieg von Sqonto
+
+Bis Version 0.10 hieß das Programm *Sqonto*. Bestehende Installationen lassen sich wie gewohnt
+über *Einstellungen → Updates* oder den neuen Installer aktualisieren:
+
+- Die Datenbank `sqonto.db` wird beim ersten Start unverändert als `sorobo.db` übernommen.
+  Sicherungen aus Sqonto lassen sich weiterhin wiederherstellen, alte automatische Sicherungen
+  werden mit den neuen rotiert.
+- Der Installer ersetzt `Sqonto.exe` und `sqonto-server.exe` durch die neuen Programme und
+  verschiebt die Verknüpfungen; der Installationsordner (`Programs\Sqonto`) mit den Daten bleibt.
+- Portable Installationen behalten bei Updates ihre bisherigen Dateinamen, damit Verknüpfungen
+  und Skripte weiter funktionieren. Wer möchte, benennt die Programme nach dem Beenden um.
+- Die Umgebungsvariablen `SQONTO_*` werden weiterhin gelesen, wenn `SOROBO_*` nicht gesetzt ist.
+
 ## Konfiguration
 
 | Umgebungsvariable    | Bedeutung                                                                | Standard                       |
 | -------------------- | ------------------------------------------------------------------------ | ------------------------------ |
-| `SQONTO_DATA_DIR`    | Datenverzeichnis (Datenbank, Dateien, Protokoll `sqonto.log`)            | `data` neben der Programmdatei |
-| `SQONTO_PORT`        | Port des lokalen Servers (ist er belegt, wird der nächste freie genutzt) | `8787`                         |
-| `SQONTO_DESKTOP_URL` | Desktop-Fenster zeigt diese Adresse statt des eingebauten Frontends      | –                              |
-| `SQONTO_DEVTOOLS`    | gesetzt: Entwicklerwerkzeuge im Desktop-Fenster                          | nur in Debug-Builds            |
+| `SOROBO_DATA_DIR`    | Datenverzeichnis (Datenbank, Dateien, Protokoll `sorobo.log`)            | `data` neben der Programmdatei |
+| `SOROBO_PORT`        | Port des lokalen Servers (ist er belegt, wird der nächste freie genutzt) | `8787`                         |
+| `SOROBO_DESKTOP_URL` | Desktop-Fenster zeigt diese Adresse statt des eingebauten Frontends      | –                              |
+| `SOROBO_DEVTOOLS`    | gesetzt: Entwicklerwerkzeuge im Desktop-Fenster                          | nur in Debug-Builds            |
 
-`sqonto-server --open` öffnet nach dem Start zusätzlich den Browser.
+`sorobo-server --open` öffnet nach dem Start zusätzlich den Browser.
 
 Der Server lauscht ausschließlich auf `127.0.0.1` und ist damit nur vom eigenen Rechner aus
 erreichbar – auch wenn er in der Desktop-Anwendung läuft.
@@ -121,7 +135,7 @@ cd frontend && npm install && npm run dev
 Die Oberfläche dann im Browser unter <http://localhost:5173> öffnen – oder im Desktop-Fenster:
 
 ```bash
-cd backend && SQONTO_DESKTOP_URL=http://localhost:5173 cargo run --bin sqonto-desktop
+cd backend && SOROBO_DESKTOP_URL=http://localhost:5173 cargo run --bin sorobo-desktop
 ```
 
 Die TypeScript-Typen der API werden aus den Rust-Strukturen erzeugt (`ts-rs`):
@@ -140,7 +154,7 @@ Rust-Tests aller Targets und der Release-Build ausgeführt. Tests laufen mit `--
 damit sie ihre kompilierten Abhängigkeiten mit dem anschließenden Paket-Build teilen.
 Ein Rust-Cache pro Plattform hält Abhängigkeiten und kompilierte Artefakte zwischen Läufen
 vor; Änderungen am Compiler oder den Abhängigkeiten werden bei der Cache-Auswahl berücksichtigt.
-Die Build-Skripte verwenden in CI mit `SQONTO_FRONTEND_READY=1` das bereits gebaute Frontend
+Die Build-Skripte verwenden in CI mit `SOROBO_FRONTEND_READY=1` das bereits gebaute Frontend
 (lokale Builds bauen es weiterhin selbst). Unter Linux werden nach dem Paket-Build zusätzlich
 die Bibliothek und der Server ohne Desktop-Features im Release-Profil getestet.
 Unter Windows prüft ein zusätzlicher Test Installation, Start des installierten
@@ -167,8 +181,8 @@ werden nicht verpackt.
 
 ### Aufbau
 
-- `backend/` – Rust-Bibliothek `sqonto` (Axum, SQLite über rusqlite, rust_decimal) mit zwei
-  Programmen: `src/main.rs` (`sqonto-server`) und `src/bin/sqonto-desktop.rs` (Fenster mit
+- `backend/` – Rust-Bibliothek `sorobo` (Axum, SQLite über rusqlite, rust_decimal) mit zwei
+  Programmen: `src/main.rs` (`sorobo-server`) und `src/bin/sorobo-desktop.rs` (Fenster mit
   WebView2/WebKit über `wry`/`tao`). Buchungslogik in `src/services/posting.rs`, Berichte in
   `src/services/reports.rs`, E-Rechnung in `src/services/einvoice.rs`, PDF-Erzeugung mit
   eingebettetem Typst in `src/pdf/` und `templates/`.
@@ -180,16 +194,16 @@ werden nicht verpackt.
 
 Copyright © 2026 Johannes Asal
 
-Sqonto ist freie Software unter der [GNU Affero General Public License, Version 3 oder
-später](LICENSE) (AGPL-3.0-or-later). Sie dürfen Sqonto nutzen, untersuchen, verändern und
-weitergeben – auch kommerziell. Wer Sqonto weitergibt oder eine veränderte Fassung als Dienst
+Sorobo ist freie Software unter der [GNU Affero General Public License, Version 3 oder
+später](LICENSE) (AGPL-3.0-or-later). Sie dürfen Sorobo nutzen, untersuchen, verändern und
+weitergeben – auch kommerziell. Wer Sorobo weitergibt oder eine veränderte Fassung als Dienst
 über ein Netzwerk anbietet, muss den Quellcode dieser Fassung unter derselben Lizenz zugänglich
 machen.
 
-Mit Sqonto erstellte Rechnungen, Berichte und sonstige Dokumente gehören Ihnen und unterliegen
+Mit Sorobo erstellte Rechnungen, Berichte und sonstige Dokumente gehören Ihnen und unterliegen
 nicht der AGPL.
 
-Sqonto enthält Bibliotheken und Schriften anderer Projekte unter deren eigenen freien Lizenzen
+Sorobo enthält Bibliotheken und Schriften anderer Projekte unter deren eigenen freien Lizenzen
 (u. a. MIT, Apache-2.0, BSD, SIL Open Font License). Die Lizenzen der Schriften liegen in
 [`backend/assets/fonts/LICENSE-FONTS.txt`](backend/assets/fonts/LICENSE-FONTS.txt); die
 vollständige Übersicht aller Komponenten erzeugt der Build als `dist/THIRD-PARTY-LICENSES.txt`
@@ -199,4 +213,4 @@ vollständige Übersicht aller Komponenten erzeugt der Build als `dist/THIRD-PAR
 
 Die Software unterstützt bei der Buchführung, ersetzt aber keine steuerliche Beratung und wird
 ohne Gewährleistung bereitgestellt. Die Übermittlung der Umsatzsteuer-Voranmeldung erfolgt über
-ELSTER; Sqonto liefert die Kennzahlen.
+ELSTER; Sorobo liefert die Kennzahlen.

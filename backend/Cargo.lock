@@ -4507,7 +4507,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sqonto"
+name = "sorobo"
 version = "0.10.0"
 dependencies = [
  "anyhow",

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // See LICENSE in the project root for the full license and warranty disclaimer.
 
-// Collects the licence texts of everything that ends up in the Sqonto programs (Rust crates,
+// Collects the licence texts of everything that ends up in the Sorobo programs (Rust crates,
 // npm packages of the frontend, bundled fonts) into one file for binary distributions.
 //
 // usage: node scripts/third-party-licenses.mjs [output file]   (default: dist/THIRD-PARTY-LICENSES.txt)
@@ -36,9 +36,9 @@ function rustPackages() {
       maxBuffer: 1 << 28,
     }),
   );
-  // Everything reachable from the Sqonto package through normal (non-dev) dependencies.
+  // Everything reachable from the Sorobo package through normal (non-dev) dependencies.
   const nodes = new Map(meta.resolve.nodes.map((n) => [n.id, n]));
-  const own = meta.packages.find((p) => p.name === 'sqonto');
+  const own = meta.packages.find((p) => p.name === 'sorobo');
   const reachable = new Set();
   const visit = (id) => {
     if (reachable.has(id)) return;
@@ -111,10 +111,10 @@ const rust = rustPackages();
 const npm = npmPackages();
 const fonts = fs.readFileSync(path.join(root, 'backend/assets/fonts/LICENSE-FONTS.txt'), 'utf8').replace(/\r\n/g, '\n');
 
-let text = `Sqonto – Lizenzen von Drittanbieter-Komponenten
+let text = `Sorobo – Lizenzen von Drittanbieter-Komponenten
 ================================================
 
-Sqonto selbst steht unter der GNU Affero General Public License, Version 3 oder später
+Sorobo selbst steht unter der GNU Affero General Public License, Version 3 oder später
 (siehe LICENSE). Die Programme enthalten die folgenden Komponenten Dritter, die jeweils unter
 ihren eigenen Lizenzen stehen.
 `;

@@ -27,7 +27,9 @@ import './styles.css';
 import { theme } from './theme';
 import { router } from './router';
 import { WindowChrome, installDesktopBridge } from './lib/desktop';
+import { takeOverLegacyStorage } from './lib/legacyStorage';
 
+takeOverLegacyStorage();
 dayjs.extend(customParseFormat);
 dayjs.locale('de');
 installDesktopBridge();
@@ -38,7 +40,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const colorSchemeManager = localStorageColorSchemeManager({ key: 'sqonto-color-scheme' });
+const colorSchemeManager = localStorageColorSchemeManager({ key: 'sorobo-color-scheme' });
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

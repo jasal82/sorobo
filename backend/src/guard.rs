@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // See LICENSE in the project root for the full license and warranty disclaimer.
 
-//! Restricts the HTTP server to pages of the local Sqonto instance.
+//! Restricts the HTTP server to pages of the local Sorobo instance.
 //!
 //! The server only listens on 127.0.0.1, but any website open in the user's browser could still
 //! send requests to it (cross-site requests, DNS rebinding). A request is therefore only accepted
@@ -31,7 +31,7 @@ pub async fn local_only(req: Request, next: Next) -> Response {
         headers.get(header::HOST),
         headers.get(header::ORIGIN)
     );
-    (StatusCode::FORBIDDEN, Json(json!({ "error": "Zugriff nur über die lokale Sqonto-Oberfläche möglich." }))).into_response()
+    (StatusCode::FORBIDDEN, Json(json!({ "error": "Zugriff nur über die lokale Sorobo-Oberfläche möglich." }))).into_response()
 }
 
 /// Host part of `host[:port]` / `[v6]:port`; None if the port is malformed.

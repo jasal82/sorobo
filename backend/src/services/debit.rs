@@ -652,12 +652,13 @@ pub fn create(conn: &Connection, req: DebitRunRequest) -> Result<DebitRunView> {
         created_at: now_str(),
     };
     let id = db::insert(conn, &mut run)?;
-    run.message_id = sepa_id(&format!("SQONTO-LS-{}-{id}", now.format("%Y%m%d%H%M%S")));
+    run.message_id = sepa_id(&format!("SOROBO-LS-{}-{id}", now.format("%Y%m%d%H%M%S")));
     db::update(conn, &run)?;
     let mut with_address = Vec::new();
     for (mut item, address, d) in items {
         item.run_id = id;
-        item.end_to_end_id = sepa_id(&format!("SQL{id}-{}", d.number));
+        // Returns are matched by the stored ID, so runs from before the rename ("SQL…") still are.
+        item.end_to_end_id = sepa_id(&format!("SOL{id}-{}", d.number));
         db::insert(conn, &mut item)?;
         cfg::log(conn, "document", d.id, "debit", format!("Lastschrift über {} zum {} erstellt ({})", fmt_money(item.amount), fmt_date(item.collection_date), item.sequence))?;
         with_address.push((item, address));

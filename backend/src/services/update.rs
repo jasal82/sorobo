@@ -26,16 +26,31 @@ use ts_rs::TS;
 use crate::util::now_str;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-const LATEST_URL: &str = "https://api.github.com/repos/jasal82/sqonto/releases/latest";
-/// Set for the program started after an update; it waits until the old one released the port.
-pub const RESTART_ENV: &str = "SQONTO_RESTARTING";
+const LATEST_URL: &str = "https://api.github.com/repos/jasal82/sorobo/releases/latest";
+/// Set for the program started after an update; it waits until the old one released the port
+/// (read as `crate::env_var("RESTARTING")`, which also accepts the former `SQONTO_RESTARTING`).
+pub const RESTART_ENV: &str = "SOROBO_RESTARTING";
 
 /// Program files as shipped by build.cmd / build.sh – the desktop app first.
 #[cfg(windows)]
-const BINARIES: [&str; 2] = ["Sqonto.exe", "sqonto-server.exe"];
+const BINARIES: [&str; 2] = ["Sorobo.exe", "sorobo-server.exe"];
 #[cfg(not(windows))]
-const BINARIES: [&str; 2] = ["sqonto", "sqonto-server"];
+const BINARIES: [&str; 2] = ["sorobo", "sorobo-server"];
+/// The same programs under their name until version 0.10 ("Sqonto"). Such an installation keeps
+/// its file names when it is updated – shortcuts and scripts point at them.
+#[cfg(windows)]
+const LEGACY_BINARIES: [&str; 2] = ["Sqonto.exe", "sqonto-server.exe"];
+#[cfg(not(windows))]
+const LEGACY_BINARIES: [&str; 2] = ["sqonto", "sqonto-server"];
 const DOCS: [&str; 2] = ["LICENSE.txt", "THIRD-PARTY-LICENSES.txt"];
+/// Package names begin with the program name. Releases made during the transition carry the
+/// packages under the former name as well, for installations that still look for those.
+const PACKAGE_PREFIXES: [&str; 2] = ["Sorobo", "Sqonto"];
+
+/// Former name of a program file, which a package may still use.
+fn legacy_name(name: &str) -> Option<&'static str> {
+    BINARIES.iter().position(|b| *b == name).map(|i| LEGACY_BINARIES[i])
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct Release {
@@ -89,9 +104,9 @@ pub struct UpdateStatus {
     pub checked_at: Option<String>,
     /// Why the last check failed.
     pub check_error: String,
-    /// Sqonto can install the update itself; otherwise it is downloaded from `release_url`.
+    /// Sorobo can install the update itself; otherwise it is downloaded from `release_url`.
     pub can_install: bool,
-    /// How the update is installed, or why Sqonto cannot do it itself.
+    /// How the update is installed, or why Sorobo cannot do it itself.
     pub install_note: String,
     #[ts(type = "number")]
     pub download_size: u64,
@@ -154,6 +169,9 @@ struct Target {
     method: Method,
     exe: PathBuf,
     dir: PathBuf,
+    /// File names of the programs in this installation: `BINARIES`, or `LEGACY_BINARIES` for one
+    /// made before the rename.
+    names: [&'static str; 2],
 }
 
 /// How this installation can be updated – determined once, the program file does not move.
@@ -166,20 +184,24 @@ fn detect() -> Result<Target, String> {
     let exe = std::env::current_exe().map_err(|e| format!("Die Programmdatei wurde nicht gefunden ({e})."))?;
     let dir = exe.parent().map(Path::to_path_buf).ok_or("Der Programmordner wurde nicht gefunden.")?;
     let name = exe.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    if !BINARIES.contains(&name) {
-        return Err(format!("„{name}“ stammt nicht aus einem Sqonto-Paket – bitte manuell aktualisieren."));
-    }
+    let names = if BINARIES.contains(&name) {
+        BINARIES
+    } else if LEGACY_BINARIES.contains(&name) {
+        LEGACY_BINARIES
+    } else {
+        return Err(format!("„{name}“ stammt nicht aus einem Sorobo-Paket – bitte manuell aktualisieren."));
+    };
     if cfg!(windows) && dir.join("unins000.exe").exists() {
-        return Ok(Target { method: Method::Installer, exe, dir });
+        return Ok(Target { method: Method::Installer, exe, dir, names });
     }
     if !writable(&dir) {
         return Err(format!("Keine Schreibrechte im Programmordner {} – bitte manuell aktualisieren.", dir.display()));
     }
-    Ok(Target { method: Method::Replace, exe, dir })
+    Ok(Target { method: Method::Replace, exe, dir, names })
 }
 
 fn writable(dir: &Path) -> bool {
-    let probe = dir.join(format!(".sqonto-schreibtest-{}", std::process::id()));
+    let probe = dir.join(format!(".sorobo-schreibtest-{}", std::process::id()));
     let ok = std::fs::write(&probe, b"").is_ok();
     let _ = std::fs::remove_file(&probe);
     ok
@@ -198,20 +220,25 @@ fn is_newer(latest: &str, current: &str) -> bool {
 
 /// Package names for this platform, preferred first (see build.cmd, build.sh and the release workflow).
 fn package_names(version: &str, method: Method) -> Vec<String> {
-    let base = format!("Sqonto-{version}");
-    match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("windows", "x86_64") if method == Method::Installer => vec![format!("{base}-windows-x64-setup.exe")],
-        ("windows", "x86_64") => vec![format!("{base}-windows-x64-portable.zip")],
-        ("windows", _) => vec![],
-        (os, arch) => {
-            // build.sh names the archives after `uname -s` and `uname -m`.
-            let os = if os == "macos" { "darwin" } else { os };
-            let arch = if os == "darwin" && arch == "aarch64" { "arm64" } else { arch };
-            let full = format!("{base}-{os}-{arch}.tar.gz");
-            // A server-only build prefers its own package; from the full one only the server is taken.
-            if cfg!(feature = "desktop") { vec![full] } else { vec![format!("{base}-{os}-{arch}-server.tar.gz"), full] }
-        }
-    }
+    PACKAGE_PREFIXES
+        .iter()
+        .flat_map(|prefix| {
+            let base = format!("{prefix}-{version}");
+            match (std::env::consts::OS, std::env::consts::ARCH) {
+                ("windows", "x86_64") if method == Method::Installer => vec![format!("{base}-windows-x64-setup.exe")],
+                ("windows", "x86_64") => vec![format!("{base}-windows-x64-portable.zip")],
+                ("windows", _) => vec![],
+                (os, arch) => {
+                    // build.sh names the archives after `uname -s` and `uname -m`.
+                    let os = if os == "macos" { "darwin" } else { os };
+                    let arch = if os == "darwin" && arch == "aarch64" { "arm64" } else { arch };
+                    let full = format!("{base}-{os}-{arch}.tar.gz");
+                    // A server-only build prefers its own package; from the full one only the server is taken.
+                    if cfg!(feature = "desktop") { vec![full] } else { vec![format!("{base}-{os}-{arch}-server.tar.gz"), full] }
+                }
+            }
+        })
+        .collect()
 }
 
 fn plan(r: &Release) -> Result<(Target, Asset), String> {
@@ -279,7 +306,7 @@ pub fn check() -> UpdateStatus {
 
 fn agent(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
-        .user_agent(format!("Sqonto/{VERSION}"))
+        .user_agent(format!("Sorobo/{VERSION}"))
         .timeout_connect(Some(Duration::from_secs(15)))
         .timeout_global(Some(timeout))
         // The system's certificates, so that company proxies with an own CA keep working.
@@ -290,7 +317,7 @@ fn agent(timeout: Duration) -> ureq::Agent {
 
 fn fetch_release() -> Result<Release> {
     // For tests against a local copy of the API.
-    let url = std::env::var("SQONTO_UPDATE_URL").unwrap_or_else(|_| LATEST_URL.into());
+    let url = crate::env_var("UPDATE_URL").unwrap_or_else(|| LATEST_URL.into());
     let resp = agent(Duration::from_secs(30)).get(&url).header("Accept", "application/vnd.github+json").call().map_err(|e| match e {
         ureq::Error::StatusCode(404) => anyhow!("Es wurde noch keine Version veröffentlicht."),
         ureq::Error::StatusCode(403 | 429) => anyhow!("GitHub lehnt die Abfrage gerade ab (Abfragelimit) – bitte später erneut versuchen."),
@@ -307,7 +334,7 @@ pub fn begin() -> Result<(), String> {
     }
     let r = s.release.as_ref().ok_or("Bitte zuerst nach Updates suchen.")?;
     if !r.is_update() {
-        return Err("Sqonto ist bereits auf dem neuesten Stand.".into());
+        return Err("Sorobo ist bereits auf dem neuesten Stand.".into());
     }
     plan(r)?;
     s.phase = Phase::Downloading;
@@ -342,8 +369,9 @@ pub fn install(work: &Path) -> Result<Command> {
         Method::Installer => Ok(setup_command(&package, &target)),
         Method::Replace => {
             let staged = work.join("neu");
-            let names = files_to_replace(&target);
-            unpack(&package, &staged, &names)?;
+            let files = files_to_replace(&target);
+            unpack(&package, &staged, &files)?;
+            let names: Vec<&str> = files.iter().map(|(_, installed)| *installed).collect();
             replace_files(&staged, &target.dir, &names)?;
             Ok(restart_command(&target.exe))
         }
@@ -402,20 +430,27 @@ fn download(a: &Asset, file: &Path, expected: &str) -> Result<()> {
     Ok(())
 }
 
-/// The program files of this installation (a server-only setup stays one) and the licence texts.
-fn files_to_replace(t: &Target) -> Vec<&'static str> {
-    BINARIES.into_iter().filter(|n| t.dir.join(n).exists() || t.exe.ends_with(n)).chain(DOCS).collect()
+/// The program files of this installation (a server-only setup stays one) and the licence texts,
+/// each as (name in the package, name in the installation).
+fn files_to_replace(t: &Target) -> Vec<(&'static str, &'static str)> {
+    (0..BINARIES.len())
+        .filter(|&i| t.dir.join(t.names[i]).exists() || t.exe.ends_with(t.names[i]))
+        .map(|i| (BINARIES[i], t.names[i]))
+        .chain(DOCS.into_iter().map(|d| (d, d)))
+        .collect()
 }
 
-/// Extracts the named files from the top level of the package (zip or tar.gz) – nothing else, so a
-/// package cannot write anywhere but `dest`. Every program file must be contained.
-fn unpack(package: &Path, dest: &Path, names: &[&str]) -> Result<()> {
+/// Extracts the given files from the top level of the package (zip or tar.gz) under their name in
+/// the installation – nothing else, so a package cannot write anywhere but `dest`. A program file
+/// may also carry its former name. Every program file must be contained.
+fn unpack(package: &Path, dest: &Path, files: &[(&str, &str)]) -> Result<()> {
     std::fs::create_dir_all(dest)?;
+    let wanted = |path: &str| files.iter().find(|(packaged, _)| *packaged == path || legacy_name(packaged) == Some(path)).map(|(_, installed)| *installed);
     if package.extension().is_some_and(|e| e == "zip") {
         let mut zip = zip::ZipArchive::new(File::open(package)?).context("Das Paket ist beschädigt")?;
-        for n in names {
-            if let Ok(mut f) = zip.by_name(n) {
-                std::io::copy(&mut f, &mut File::create(dest.join(n))?)?;
+        for (packaged, installed) in files {
+            if let Some(i) = std::iter::once(*packaged).chain(legacy_name(packaged)).find_map(|n| zip.index_for_name(n)) {
+                std::io::copy(&mut zip.by_index(i)?, &mut File::create(dest.join(installed))?)?;
             }
         }
     } else {
@@ -424,15 +459,15 @@ fn unpack(package: &Path, dest: &Path, names: &[&str]) -> Result<()> {
             let mut e = entry.context("Das Paket ist beschädigt")?;
             let path = e.path()?.to_string_lossy().trim_start_matches("./").to_string();
             if e.header().entry_type().is_file()
-                && let Some(n) = names.iter().find(|n| **n == path)
+                && let Some(installed) = wanted(&path)
             {
-                std::io::copy(&mut e, &mut File::create(dest.join(n))?)?;
+                std::io::copy(&mut e, &mut File::create(dest.join(installed))?)?;
             }
         }
     }
-    for n in names.iter().filter(|n| BINARIES.contains(n)) {
-        if !dest.join(n).is_file() {
-            bail!("Das Paket enthält {n} nicht – Update abgebrochen.");
+    for (packaged, installed) in files.iter().filter(|(packaged, _)| BINARIES.contains(packaged)) {
+        if !dest.join(installed).is_file() {
+            bail!("Das Paket enthält {packaged} nicht – Update abgebrochen.");
         }
     }
     Ok(())
@@ -458,7 +493,7 @@ fn replace_files(staged: &Path, dir: &Path, names: &[&str]) -> Result<()> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                if BINARIES.contains(n) {
+                if BINARIES.contains(n) || LEGACY_BINARIES.contains(n) {
                     std::fs::set_permissions(&current, std::fs::Permissions::from_mode(0o755))?;
                 }
             }
@@ -478,9 +513,9 @@ fn replace_files(staged: &Path, dir: &Path, names: &[&str]) -> Result<()> {
 }
 
 /// The setup updates the installation without questions (showing its progress) and starts the
-/// updated program again – `/RELAUNCH` is read by installer/sqonto.iss.
+/// updated program again – `/RELAUNCH` is read by installer/sorobo.iss.
 fn setup_command(setup: &Path, t: &Target) -> Command {
-    let relaunch = if t.exe.ends_with(BINARIES[0]) { "desktop" } else { "server" };
+    let relaunch = if t.exe.ends_with(t.names[0]) { "desktop" } else { "server" };
     let mut c = Command::new(setup);
     c.args(["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"]).arg(format!("/RELAUNCH={relaunch}"));
     c
@@ -501,7 +536,7 @@ pub fn cleanup(work: &Path) {
     }
     let _ = std::fs::remove_dir_all(work);
     if let Ok(t) = &*TARGET {
-        for n in BINARIES.iter().chain(&DOCS) {
+        for n in BINARIES.iter().chain(&LEGACY_BINARIES).chain(&DOCS) {
             let _ = std::fs::remove_file(t.dir.join(format!("{n}.old")));
         }
     }
@@ -512,7 +547,7 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("sqonto-update-{name}-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("sorobo-update-{name}-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -539,31 +574,33 @@ mod tests {
     fn packages_match_the_release_assets() {
         let names = package_names("1.2.3", Method::Replace);
         if cfg!(windows) {
-            assert_eq!(names, ["Sqonto-1.2.3-windows-x64-portable.zip"]);
-            assert_eq!(package_names("1.2.3", Method::Installer), ["Sqonto-1.2.3-windows-x64-setup.exe"]);
-        } else if cfg!(target_os = "macos") {
-            assert_eq!(names.last().unwrap(), "Sqonto-1.2.3-darwin-arm64.tar.gz");
+            assert_eq!(names, ["Sorobo-1.2.3-windows-x64-portable.zip", "Sqonto-1.2.3-windows-x64-portable.zip"]);
+            assert_eq!(package_names("1.2.3", Method::Installer), ["Sorobo-1.2.3-windows-x64-setup.exe", "Sqonto-1.2.3-windows-x64-setup.exe"]);
         } else {
-            assert_eq!(names.last().unwrap(), "Sqonto-1.2.3-linux-x86_64.tar.gz");
+            let platform = if cfg!(target_os = "macos") { "darwin-arm64" } else { "linux-x86_64" };
+            // The new name first; the former one only as a fallback.
+            assert!(names.first().unwrap().starts_with("Sorobo-1.2.3-"));
+            assert!(names.contains(&format!("Sorobo-1.2.3-{platform}.tar.gz")));
+            assert_eq!(names.last().unwrap(), &format!("Sqonto-1.2.3-{platform}.tar.gz"));
         }
     }
 
     #[test]
     fn checksums_are_found_in_sha256sums() {
-        let sums = "861cce  SHA256SUMS.txt\nABC123  Sqonto-1.0.0-windows-x64-setup.exe\ndef456 *Sqonto-1.0.0-linux-x86_64.tar.gz\n";
-        assert_eq!(sum_for(sums, "Sqonto-1.0.0-windows-x64-setup.exe").as_deref(), Some("abc123"));
-        assert_eq!(sum_for(sums, "Sqonto-1.0.0-linux-x86_64.tar.gz").as_deref(), Some("def456"));
-        assert_eq!(sum_for(sums, "Sqonto-1.0.0-windows-x64-portable.zip"), None);
+        let sums = "861cce  SHA256SUMS.txt\nABC123  Sorobo-1.0.0-windows-x64-setup.exe\ndef456 *Sorobo-1.0.0-linux-x86_64.tar.gz\n";
+        assert_eq!(sum_for(sums, "Sorobo-1.0.0-windows-x64-setup.exe").as_deref(), Some("abc123"));
+        assert_eq!(sum_for(sums, "Sorobo-1.0.0-linux-x86_64.tar.gz").as_deref(), Some("def456"));
+        assert_eq!(sum_for(sums, "Sorobo-1.0.0-windows-x64-portable.zip"), None);
     }
 
     #[test]
     fn only_the_program_files_are_unpacked() {
         let dir = temp_dir("unpack");
-        let names = [BINARIES[0], BINARIES[1], DOCS[0]];
+        let names = [(BINARIES[0], BINARIES[0]), (BINARIES[1], BINARIES[1]), (DOCS[0], DOCS[0])];
         // zip as made by Compress-Archive
         let zip_path = dir.join("p.zip");
         let mut zip = zip::ZipWriter::new(File::create(&zip_path).unwrap());
-        for (n, body) in [(BINARIES[0], "desktop"), (BINARIES[1], "server"), ("data/sqonto.db", "fremd")] {
+        for (n, body) in [(BINARIES[0], "desktop"), (BINARIES[1], "server"), ("data/sorobo.db", "fremd")] {
             zip.start_file(n, zip::write::SimpleFileOptions::default()).unwrap();
             zip.write_all(body.as_bytes()).unwrap();
         }
@@ -591,6 +628,50 @@ mod tests {
         zip.start_file(BINARIES[0], zip::write::SimpleFileOptions::default()).unwrap();
         zip.finish().unwrap();
         assert!(unpack(&zip_path, &dir.join("z2"), &names).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn zip_with(path: &Path, files: &[(&str, &str)]) {
+        let mut zip = zip::ZipWriter::new(File::create(path).unwrap());
+        for (n, body) in files {
+            zip.start_file(*n, zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(body.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    #[test]
+    fn an_installation_from_before_the_rename_keeps_its_file_names() {
+        let dir = temp_dir("legacy");
+        let exe = dir.join(LEGACY_BINARIES[0]);
+        std::fs::write(&exe, "alt").unwrap();
+        std::fs::write(dir.join(LEGACY_BINARIES[1]), "alt").unwrap();
+        let target = Target { method: Method::Replace, exe, dir: dir.clone(), names: LEGACY_BINARIES };
+        let files = files_to_replace(&target);
+        assert_eq!(&files[..2], [(BINARIES[0], LEGACY_BINARIES[0]), (BINARIES[1], LEGACY_BINARIES[1])]);
+        // A package with the new names is installed under the former ones.
+        let package = dir.join("neu.zip");
+        zip_with(&package, &[(BINARIES[0], "desktop"), (BINARIES[1], "server")]);
+        let staged = dir.join("neu");
+        unpack(&package, &staged, &files).unwrap();
+        let names: Vec<&str> = files.iter().map(|(_, installed)| *installed).collect();
+        replace_files(&staged, &dir, &names).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join(LEGACY_BINARIES[0])).unwrap(), "desktop");
+        assert_eq!(std::fs::read_to_string(dir.join(LEGACY_BINARIES[1])).unwrap(), "server");
+        assert!(!dir.join(BINARIES[0]).exists());
+        assert!(setup_command(Path::new("setup.exe"), &target).get_args().any(|a| a == "/RELAUNCH=desktop"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_package_may_still_use_the_former_file_names() {
+        let dir = temp_dir("legacy-package");
+        let files = [(BINARIES[0], BINARIES[0]), (BINARIES[1], BINARIES[1])];
+        let package = dir.join("alt.zip");
+        zip_with(&package, &[(LEGACY_BINARIES[0], "desktop"), (LEGACY_BINARIES[1], "server")]);
+        unpack(&package, &dir.join("z"), &files).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join("z").join(BINARIES[0])).unwrap(), "desktop");
+        assert_eq!(std::fs::read_to_string(dir.join("z").join(BINARIES[1])).unwrap(), "server");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
