@@ -27,5 +27,6 @@ pub mod recurring;
 pub mod reports;
 pub mod sepa;
 pub mod settings;
+pub mod timetracking;
 pub mod update;
 pub mod zm;

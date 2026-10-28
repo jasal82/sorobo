@@ -31,6 +31,8 @@ const MIGRATIONS: &[&str] = &[
     "",
     // 2 → 3: SEPA-Lastschrift as payment method of documents (columns only)
     "",
+    // 3 → 4: Projektstunden (people, time_entries; tables only)
+    "",
 ];
 
 pub const SCHEMA_VERSION: i64 = 1 + MIGRATIONS.len() as i64;

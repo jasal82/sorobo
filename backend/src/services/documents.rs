@@ -545,6 +545,9 @@ pub fn delete(conn: &Connection, id: i64) -> Result<()> {
     if refs > 0 {
         bail_user!("Dem Dokument sind Zahlungen zugeordnet.");
     }
+    if db::scalar_i64(conn, "SELECT COUNT(*) FROM time_entries WHERE document_id = ?1", &[v(id)])? > 0 {
+        bail_user!("Zu diesem Dokument sind Stunden erfasst. Bitte zuerst die Zeiteinträge löschen oder einem anderen Dokument zuordnen.");
+    }
     if db::scalar_i64(conn, "SELECT COUNT(*) FROM recurring_invoices WHERE template_id = ?1", &[v(id)])? > 0 {
         bail_user!("Der Entwurf ist die Vorlage einer Abo-Rechnung. Bitte zuerst die Abo-Rechnung löschen.");
     }
