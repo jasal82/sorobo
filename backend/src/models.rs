@@ -964,6 +964,8 @@ pub struct DocTexts {
 pub struct DocSettings {
     pub payment_terms_days: i64,
     pub quote_validity_days: i64,
+    /// Quotes get a field for the customer to sign and accept them.
+    pub quote_signature: bool,
     pub default_layout_id: Option<i64>,
     pub default_unit: String,
     pub einvoice_default: String,
@@ -976,6 +978,7 @@ impl Default for DocSettings {
         Self {
             payment_terms_days: 14,
             quote_validity_days: 30,
+            quote_signature: true,
             default_layout_id: None,
             default_unit: "Stk".into(),
             einvoice_default: "pdf".into(),

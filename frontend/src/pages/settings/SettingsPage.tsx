@@ -403,6 +403,7 @@ function DocsTab({ s, patch }: { s: Settings; patch: Patch }) {
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
           <NumberInput label="Zahlungsziel" suffix=" Tage" min={0} value={d.payment_terms_days} onChange={(v) => set({ payment_terms_days: Number(v) || 0 })} />
           <NumberInput label="Gültigkeit von Angeboten" suffix=" Tage" min={1} value={d.quote_validity_days} onChange={(v) => set({ quote_validity_days: Number(v) || 30 })} />
+          <Switch label="Unterschriftsfeld auf Angeboten" checked={d.quote_signature} onChange={(e) => set({ quote_signature: e.currentTarget.checked })} mt={{ base: 0, sm: 24 }} />
           <TextInput label="Standard-Einheit" value={d.default_unit} onChange={(e) => set({ default_unit: e.currentTarget.value })} />
           <Select label="Standard-Rechnungsformat" data={EINVOICE_FORMATS} value={d.einvoice_default} onChange={(v) => set({ einvoice_default: v ?? 'pdf' })} />
           <Select

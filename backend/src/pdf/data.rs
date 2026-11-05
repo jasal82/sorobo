@@ -400,6 +400,7 @@ pub fn document_job(
             "info": info,
             "intro": intro,
             "closing": closing,
+            "signature": doc.doc_type == "quote" && s.docs.quote_signature,
             "columns": {
                 "pos": layout.show_position,
                 "number": layout.show_article_number && lines.iter().any(|l| !l.article_number.is_empty()),
@@ -727,4 +728,46 @@ pub fn report_job(
         "notes": notes,
     });
     Ok(RenderJob::new(super::REPORT_TEMPLATE, data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(doc_type: &str, signature: bool) -> RenderJob {
+        let conn = crate::db::open_memory();
+        cfg::ensure_seeded(&conn).unwrap();
+        let mut s = cfg::load(&conn).unwrap();
+        s.docs.quote_signature = signature;
+        s.company.name = "Muster GmbH".into();
+        s.company.street = "Musterweg 1".into();
+        s.company.zip = "12345".into();
+        s.company.city = "Musterstadt".into();
+        cfg::save(&conn, &s).unwrap();
+        let (mut doc, lines) = sample_document();
+        doc.doc_type = doc_type.into();
+        document_job(&conn, Path::new("."), &doc, &lines, None).unwrap()
+    }
+
+    fn signature(job: &RenderJob) -> bool {
+        let data: Value = serde_json::from_slice(&job.files["data.json"]).unwrap();
+        data["doc"]["signature"].as_bool().unwrap()
+    }
+
+    #[test]
+    fn only_quotes_get_a_signature_field_and_only_when_enabled() {
+        assert!(signature(&job("quote", true)));
+        assert!(!signature(&job("quote", false)));
+        assert!(!signature(&job("invoice", true)));
+    }
+
+    #[test]
+    fn quote_with_signature_field_renders() {
+        let engine = crate::pdf::PdfEngine::new();
+        let j = job("quote", true);
+        let doc = engine.compile(j.source, j.files).unwrap();
+        let text = engine.svgs(&doc).join("");
+        assert!(!text.is_empty());
+        assert!(engine.pdf(&doc, false).unwrap().starts_with(b"%PDF"));
+    }
 }
