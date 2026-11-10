@@ -400,6 +400,8 @@ pub fn document_job(
             "info": info,
             "intro": intro,
             "closing": closing,
+            // Not for quotes that were already accepted or rejected.
+            "signature": layout.show_signature && doc.doc_type == "quote" && matches!(doc.status.as_str(), "draft" | "open"),
             "columns": {
                 "pos": layout.show_position,
                 "number": layout.show_article_number && lines.iter().any(|l| !l.article_number.is_empty()),
@@ -727,4 +729,53 @@ pub fn report_job(
         "notes": notes,
     });
     Ok(RenderJob::new(super::REPORT_TEMPLATE, data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(doc_type: &str, status: &str, signature: bool) -> RenderJob {
+        let conn = crate::db::open_memory();
+        cfg::ensure_seeded(&conn).unwrap();
+        cfg::seed_test_company(&conn);
+        let (mut doc, lines) = sample_document();
+        doc.doc_type = doc_type.into();
+        doc.status = status.into();
+        let layout = LayoutConfig { show_signature: signature, ..Default::default() };
+        document_job(&conn, Path::new("."), &doc, &lines, Some(layout)).unwrap()
+    }
+
+    fn signature(job: &RenderJob) -> bool {
+        let data: Value = serde_json::from_slice(&job.files["data.json"]).unwrap();
+        data["doc"]["signature"].as_bool().unwrap()
+    }
+
+    #[test]
+    fn signature_field_is_off_unless_the_layout_enables_it() {
+        // layouts stored before the option existed
+        let mut stored = serde_json::to_value(LayoutConfig::default()).unwrap();
+        stored.as_object_mut().unwrap().remove("show_signature");
+        assert!(!serde_json::from_value::<LayoutConfig>(stored).unwrap().show_signature);
+        assert!(!signature(&job("quote", "open", false)));
+    }
+
+    #[test]
+    fn only_open_and_draft_quotes_get_a_signature_field() {
+        assert!(signature(&job("quote", "open", true)));
+        assert!(signature(&job("quote", "draft", true)));
+        assert!(!signature(&job("quote", "accepted", true)));
+        assert!(!signature(&job("quote", "rejected", true)));
+        assert!(!signature(&job("invoice", "open", true)));
+    }
+
+    #[test]
+    fn signature_field_changes_the_rendered_quote() {
+        let engine = crate::pdf::PdfEngine::new();
+        let pages = |signature| {
+            let j = job("quote", "open", signature);
+            engine.svgs(&engine.compile(j.source, j.files).unwrap())
+        };
+        assert_ne!(pages(true), pages(false));
+    }
 }

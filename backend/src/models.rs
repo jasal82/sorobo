@@ -255,6 +255,8 @@ pub struct LayoutConfig {
     pub show_page_numbers: bool,
     pub fold_marks: bool,
     pub show_girocode: bool,
+    /// Quotes end with a field for the customer to sign and accept them.
+    pub show_signature: bool,
     pub accent_bar: bool,
 }
 
@@ -305,6 +307,7 @@ impl Default for LayoutConfig {
             show_page_numbers: true,
             fold_marks: true,
             show_girocode: true,
+            show_signature: false,
             accent_bar: false,
         }
     }

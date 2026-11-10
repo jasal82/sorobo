@@ -16,4 +16,8 @@ table_style: string, table_header_fill: boolean, show_position: boolean, show_ar
 /**
  * auto | custom
  */
-footer_mode: string, footer_custom: Array<string>, footer_size: number, show_page_numbers: boolean, fold_marks: boolean, show_girocode: boolean, accent_bar: boolean, };
+footer_mode: string, footer_custom: Array<string>, footer_size: number, show_page_numbers: boolean, fold_marks: boolean, show_girocode: boolean, 
+/**
+ * Quotes end with a field for the customer to sign and accept them.
+ */
+show_signature: boolean, accent_bar: boolean, };

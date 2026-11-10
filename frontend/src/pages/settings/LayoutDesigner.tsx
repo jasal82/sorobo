@@ -342,6 +342,7 @@ export function LayoutDesignerPage() {
                       )}
                       <Switch label="Falz- und Lochmarken" checked={cfg.fold_marks} onChange={(e) => set({ fold_marks: e.currentTarget.checked })} />
                       <Switch label="GiroCode (QR-Code zum Bezahlen)" checked={cfg.show_girocode} onChange={(e) => set({ show_girocode: e.currentTarget.checked })} />
+                      <Switch label="Unterschriftsfeld auf Angeboten" checked={cfg.show_signature} onChange={(e) => set({ show_signature: e.currentTarget.checked })} />
                       <Switch label="Seitenzahlen" checked={cfg.show_page_numbers} onChange={(e) => set({ show_page_numbers: e.currentTarget.checked })} />
                       <SimpleGrid cols={3} spacing="xs">
                         <NumberInput size="xs" label="Anschrift X" suffix=" mm" value={cfg.address_x} onChange={(v) => set({ address_x: Number(v) || 0 })} />

@@ -320,3 +320,21 @@
   v(4mm)
   block(breakable: false, txt(D.closing))
 }
+
+// Order confirmation of a quote: the customer signs and returns it.
+#if D.at("signature", default: false) {
+  v(10mm)
+  block(breakable: false, {
+    text(weight: "semibold")[Auftrag erteilt]
+    v(14mm)
+    grid(
+      columns: (1fr, 1fr),
+      column-gutter: 12mm,
+      row-gutter: 1mm,
+      line(length: 100%, stroke: 0.5pt + muted),
+      line(length: 100%, stroke: 0.5pt + muted),
+      text(size: 0.85em, fill: muted)[Ort, Datum],
+      text(size: 0.85em, fill: muted)[Unterschrift des Auftraggebers],
+    )
+  })
+}
